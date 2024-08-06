@@ -1,7 +1,16 @@
-use std::{collections::HashMap, error::Error, fs, path::Path};
+use std::{
+    collections::HashMap,
+    error::Error,
+    fs::{self},
+    path::Path,
+};
 
 use mapgen_core::{
-    generator::{Generator, GeneratorParams}, kernel::Kernel, map::{BlockType, Map}, random::{Random, RandomDist, Seed}, walker::{Walker, WalkerParams, Waypoints}
+    generator::{Generator, GeneratorParams},
+    kernel::Kernel,
+    map::{BlockType, Map},
+    random::{Random, RandomDist, Seed},
+    walker::{Walker, WalkerParams, Waypoints},
 };
 use serde::de::DeserializeOwned;
 
@@ -11,14 +20,16 @@ const LAST_SEED: u64 = 100_000; // u64::MAX
 fn main() {
     use std::time::Instant;
 
-    let gen = load_configs_from_dir::<GeneratorParams, _>("../data/configs/generator")
-        .unwrap()["insaneV2"];
+    let gen = load_configs_from_dir::<GeneratorParams, _>("../data/configs/generator").unwrap()
+        ["insaneV2"];
 
-    let wal = load_configs_from_dir::<WalkerParams, _>("../data/configs/walker")
-        .unwrap()["insaneV2"].clone();
+    let wal = load_configs_from_dir::<WalkerParams, _>("../data/configs/walker").unwrap()
+        ["insaneV2"]
+        .clone();
 
-    let way = load_configs_from_dir::<Waypoints, _>("../data/configs/waypoints")
-        .unwrap()["hor_line"].clone();
+    let way = load_configs_from_dir::<Waypoints, _>("../data/configs/waypoints").unwrap()
+        ["hor_line"]
+        .clone();
 
     let prng = Random::new(
         Seed::random(),
@@ -31,7 +42,7 @@ fn main() {
     let walker = Walker::new(
         Kernel::new(5, 0.0),
         Kernel::new(7, 0.0),
-        way.waypoints.clone(),
+        way.with_map_bounds(300, 150),
         prng,
         wal.clone(),
     );
@@ -55,7 +66,7 @@ fn main() {
                     _ => println!(": success"),
                 }
             }
-            
+
             generator.map.clear();
         }
     }

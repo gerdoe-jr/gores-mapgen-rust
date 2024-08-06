@@ -74,8 +74,8 @@ impl Position {
     pub fn is_shift_valid(&self, shift: ShiftDirection, map: &Map) -> bool {
         match shift {
             ShiftDirection::Up => self.y > 0,
-            ShiftDirection::Right => self.x < map.width - 1,
-            ShiftDirection::Down => self.y < map.height - 1,
+            ShiftDirection::Right => self.x < map.width() - 1,
+            ShiftDirection::Down => self.y < map.height() - 1,
             ShiftDirection::Left => self.x > 0,
         }
     }

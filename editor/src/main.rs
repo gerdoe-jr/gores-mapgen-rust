@@ -5,39 +5,16 @@ pub mod gui;
 pub mod rendering;
 
 use crate::{editor::*, fps_control::*, rendering::*};
-use clap::{crate_version, Parser};
 use macroquad::{color::*, miniquad, window::*};
 use mapgen_core::map::*;
 use miniquad::conf::{Conf, Platform};
 use simple_logger::SimpleLogger;
-use std::panic::{self, AssertUnwindSafe};
 
 const DISABLE_VSYNC: bool = true;
 
-#[derive(Parser, Debug)]
-#[command(name = "Random Gores Map Generator")]
-#[command(version = crate_version!())]
-#[command(about = "Visual editor for generating maps and customizing the generators presets", long_about = None)]
-struct Args {
-    /// select initial generation config
-    config: Option<String>,
-
-    /// enable instant, auto generate and fixed seed
-    #[arg(short, long)]
-    testing: bool,
-
-    /// name of initial generation config
-    #[arg(short, default_value = "hardV2")]
-    gen_config: String,
-
-    /// name of initial map config
-    #[arg(short, default_value = "small_s")]
-    map_config: String,
-}
-
 fn window_conf() -> Conf {
     Conf {
-        window_title: "egui with macroquad".to_owned(),
+        window_title: "mapgen editor".to_owned(),
         platform: Platform {
             swap_interval: match DISABLE_VSYNC {
                 true => Some(0), // set swap_interval to 0 to disable vsync
@@ -51,23 +28,10 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let args = Args::parse();
     SimpleLogger::new().init().unwrap();
 
     let mut editor = Editor::new();
     let mut fps_ctrl = FPSControl::new().with_max_fps(120);
-
-    if args.testing {
-        editor.instant = true;
-        editor.auto_generate = true;
-        editor.edit_gen_config = true;
-    }
-
-    if let Some(config_name) = args.config {
-        if editor.config.generator.all.contains_key(&config_name) {
-            editor.config.generator.current = config_name;
-        }
-    }
 
     loop {
         fps_ctrl.on_frame_start();
@@ -78,7 +42,6 @@ async fn main() {
         if editor.is_paused() && editor.auto_generate {
             editor.set_playing();
         }
-
         // perform walker steps
         let steps = match editor.instant {
             true => usize::max_value(),
@@ -86,15 +49,27 @@ async fn main() {
         };
 
         if editor.generator.as_ref().is_some() {
+            if editor.width != editor.generator.as_ref().unwrap().map.width()
+                || editor.height != editor.generator.as_ref().unwrap().map.height()
+            {
+                editor.generator.as_mut().unwrap().map.reshape(editor.width, editor.height);
+                editor.generator.as_mut().unwrap().walker.waypoints = editor.config.waypoints.get().with_map_bounds(editor.width, editor.height)
+            }
+    
             for _ in 0..steps {
                 if editor.is_paused() || editor.generator.as_ref().unwrap().walker.finished {
                     break;
                 }
 
-                editor.generator.as_mut().unwrap().step().unwrap_or_else(|err| {
-                    println!("Walker Step Failed: {:}", err);
-                    editor.set_setup();
-                });
+                editor
+                    .generator
+                    .as_mut()
+                    .unwrap()
+                    .step()
+                    .unwrap_or_else(|err| {
+                        println!("Walker Step Failed: {:}", err);
+                        editor.set_setup();
+                    });
 
                 // walker did a step using SingleStep -> now pause
                 if editor.is_single_setp() {
@@ -105,16 +80,14 @@ async fn main() {
             // this is called ONCE after map was generated
             if editor.generator.as_ref().unwrap().walker.finished && !editor.is_setup() {
                 // kinda crappy, but ensure that even a panic doesnt crash the program
-                let _ = panic::catch_unwind(AssertUnwindSafe(|| {
-                    editor
-                        .generator
-                        .as_mut()
-                        .unwrap()
-                        .post_processing()
-                        .unwrap_or_else(|err| {
-                            println!("Post Processing Failed: {:}", err);
-                        });
-                }));
+                editor
+                    .generator
+                    .as_mut()
+                    .unwrap()
+                    .post_processing()
+                    .unwrap_or_else(|err| {
+                        println!("Post Processing Failed: {:}", err);
+                    });
 
                 // switch into setup mode for next map
                 editor.set_setup();
@@ -130,10 +103,22 @@ async fn main() {
                 &editor.generator.as_ref().unwrap().map.chunks_edited,
                 editor.generator.as_ref().unwrap().map.chunk_size,
             );
-            draw_walker_kernel(&editor.generator.as_ref().unwrap().walker, KernelType::Outer);
-            draw_walker_kernel(&editor.generator.as_ref().unwrap().walker, KernelType::Inner);
+            draw_walker_kernel(
+                &editor.generator.as_ref().unwrap().walker,
+                KernelType::Outer,
+            );
+            draw_walker_kernel(
+                &editor.generator.as_ref().unwrap().walker,
+                KernelType::Inner,
+            );
             draw_walker(&editor.generator.as_ref().unwrap().walker);
-            draw_waypoints(&editor.config.waypoints.get().waypoints);
+            draw_waypoints(
+                &editor
+                    .config
+                    .waypoints
+                    .get()
+                    .with_map_bounds(editor.width, editor.height),
+            );
         }
 
         egui_macroquad::draw();

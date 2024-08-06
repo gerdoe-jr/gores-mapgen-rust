@@ -61,10 +61,20 @@ pub struct Pulse {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Waypoints {
-    pub waypoints: Vec<Position>,
+    pub waypoints: Vec<(f32, f32)>,
 }
 
-// this walker is indeed very cute
+impl Waypoints {
+    pub fn with_map_bounds(&self, width: usize, height: usize) -> Vec<Position> {
+        self.waypoints.iter().map(|&( x, y )| {
+            Position {
+                x: (x * width as f32) as usize,
+                y: (y * height as f32) as usize
+            }
+        }).collect::<Vec<Position>>()
+    }
+}
+
 #[derive(Debug)]
 pub struct Walker {
     pub pos: Position,
@@ -90,6 +100,7 @@ pub struct Walker {
 }
 
 impl Walker {
+    /// walker accepts waypoints only after performing map bounds
     pub fn new(
         inner_kernel: Kernel,
         outer_kernel: Kernel,

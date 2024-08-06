@@ -95,7 +95,7 @@ fn main() {
             let walker = Walker::new(
                 Kernel::new(5, 0.0),
                 Kernel::new(7, 0.0),
-                way.waypoints,
+                way.with_map_bounds(500, 500),
                 prng,
                 wal,
             );

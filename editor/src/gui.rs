@@ -140,12 +140,12 @@ pub fn field_edit_widget<T, F>(
     if vertical {
         ui.vertical(|ui| {
             ui.label(label);
-            edit_element(ui, value)
+            edit_element(ui, value);
         });
     } else {
         ui.horizontal(|ui| {
             ui.label(label);
-            edit_element(ui, value)
+            edit_element(ui, value);
         });
     }
 }
@@ -182,6 +182,15 @@ pub fn edit_f32_prob(ui: &mut Ui, value: &mut f32) {
             .fixed_decimals(3)
             .step_by(0.001),
     );
+}
+
+pub fn edit_f32_tuple(ui: &mut Ui, value: &mut (f32, f32)) {
+    ui.horizontal(|ui| {
+        ui.label("x:");
+        ui.add(egui::widgets::DragValue::new(&mut value.0).clamp_range(0..=1));
+        ui.label("y:");
+        ui.add(egui::widgets::DragValue::new(&mut value.1).clamp_range(0..=1));
+    });
 }
 
 pub fn edit_string(ui: &mut Ui, value: &mut String) {
@@ -299,6 +308,24 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
                 }
             });
         }
+
+        ui.horizontal(|ui| {
+            field_edit_widget(
+                ui,
+                &mut editor.width,
+                edit_usize,
+                "map width",
+                false,
+            );
+            field_edit_widget(
+                ui,
+                &mut editor.height,
+                edit_usize,
+                "map height",
+                false,
+            );
+        });
+
         ui.separator();
         // =======================================[ DEBUG LAYERS ]===================================
 
@@ -603,7 +630,7 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
                     vec_edit_widget(
                         ui,
                         &mut editor.config.waypoints.get_mut().waypoints,
-                        edit_position,
+                        edit_f32_tuple,
                         "waypoints",
                         true,
                         false,

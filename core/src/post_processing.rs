@@ -16,9 +16,10 @@ pub fn is_freeze(block_type: BlockType) -> bool {
 /// Post processing step to fix all existing edge-bugs, as certain inner/outer kernel
 /// configurations do not ensure a min. 1-block freeze padding consistently.
 pub fn fix_edge_bugs(map: &mut Map) -> Result<(), &'static str> {
-    let mut edge_bug = Array2::from_elem((map.width, map.height), false);
-    let width = map.width;
-    let height = map.height;
+    let width = map.width();
+    let height = map.height();
+
+    let mut edge_bug = Array2::from_elem((width, height), false);
 
     for x in 0..width {
         for y in 0..height {
@@ -87,8 +88,8 @@ pub fn fill_open_areas(map: &mut Map, max_distance: f32) -> Array2<f32> {
 pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'static str> {
     let mut candidates: Vec<(Position, ShiftDirection)> = Vec::new();
 
-    let width = map.width;
-    let height = map.height;
+    let width = map.width();
+    let height = map.height();
 
     let window_size = 2; // 2 -> 5x5 windows
 
@@ -466,8 +467,8 @@ pub fn get_window<T>(
 
 /// removes unconnected/isolated that are smaller in size than given minimal threshold
 pub fn remove_freeze_blobs(map: &mut Map, min_freeze_size: usize) {
-    let width = map.width;
-    let height = map.height;
+    let width = map.width();
+    let height = map.height();
 
     // keeps track of which blocks are (in)valid. Valid blocks are isolated freeze block that are
     // not directly connected to any solid blocks. Invalid blocks are (in)directly connected to

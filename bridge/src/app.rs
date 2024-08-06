@@ -143,7 +143,7 @@ impl ServerBridge {
         let walker = Walker::new(
             Kernel::new(5, 0.0),
             Kernel::new(7, 0.0),
-            way.waypoints.clone(),
+            way.with_map_bounds(500, 500),
             prng,
             wal.clone(),
         );
@@ -385,7 +385,7 @@ impl ServerBridge {
                     // TODO: quotation marks?
                     self.current_waypoints = callback_args[2].to_string();
 
-                    self.generator.walker.waypoints = self.waypoints_configs[&self.current_waypoints].waypoints.clone();
+                    self.generator.walker.waypoints = self.waypoints_configs[&self.current_waypoints].with_map_bounds(500, 500);
                 }
                 s => warn!(gen!("Unknown configuration: {}"), s),
             },

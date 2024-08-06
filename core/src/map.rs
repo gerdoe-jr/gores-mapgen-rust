@@ -102,30 +102,42 @@ pub enum KernelType {
 #[derive(Debug)]
 pub struct Map {
     pub grid: Array2<BlockType>,
-    pub height: usize,
-    pub width: usize,
     pub chunks_edited: Array2<bool>, // TODO: make this optional in case editor is not used!
     pub chunk_size: usize,
-    default_block: BlockType
+    default_block: BlockType,
 }
 
 impl Map {
     pub fn new(width: usize, height: usize, default_block: BlockType) -> Map {
         Map {
             grid: Array2::from_elem((width, height), default_block),
-            width,
-            height,
             chunks_edited: Array2::from_elem(
                 (width.div_ceil(CHUNK_SIZE), height.div_ceil(CHUNK_SIZE)),
                 false,
             ),
             chunk_size: CHUNK_SIZE,
-            default_block
+            default_block,
         }
     }
 
     pub fn clear(&mut self) {
         self.grid.fill(self.default_block)
+    }
+
+    pub fn width(&self) -> usize {
+        self.grid.dim().0
+    }
+
+    pub fn height(&self) -> usize {
+        self.grid.dim().1
+    }
+
+    pub fn reshape(&mut self, width: usize, height: usize) {
+        self.grid = Array2::from_elem((width, height), self.default_block);
+        self.chunks_edited = Array2::from_elem(
+            (width.div_ceil(CHUNK_SIZE), height.div_ceil(CHUNK_SIZE)),
+            false,
+        );
     }
 
     pub fn apply_kernel(
@@ -139,8 +151,8 @@ impl Map {
 
         let exceeds_left_bound = walker.pos.x < offset;
         let exceeds_upper_bound = walker.pos.y < offset;
-        let exceeds_right_bound = (walker.pos.x + extend) > self.width;
-        let exceeds_lower_bound = (walker.pos.y + extend) > self.height;
+        let exceeds_right_bound = (walker.pos.x + extend) > self.width();
+        let exceeds_lower_bound = (walker.pos.y + extend) > self.height();
 
         if exceeds_left_bound || exceeds_upper_bound || exceeds_right_bound || exceeds_lower_bound {
             return Err("Kernel out of bounds");
@@ -172,10 +184,10 @@ impl Map {
     fn pos_to_chunk_pos(&self, pos: Position) -> Position {
         Position::new(pos.x / self.chunk_size, pos.y / self.chunk_size)
     }
-    
+
     pub fn pos_in_bounds(&self, pos: &Position) -> bool {
         // we dont have to check for lower bound, because of usize
-        pos.x < self.width && pos.y < self.height
+        pos.x < self.width() && pos.y < self.height()
     }
 
     pub fn check_area_exists(

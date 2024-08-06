@@ -109,7 +109,7 @@ impl Editor {
             last_mouse: None,
             steps_per_frame: STEPS_PER_FRAME,
             generator: None,
-            user_seed: Seed::from_str("iMilchshake"),
+            user_seed: Seed::random(),
             instant: false,
             auto_generate: false,
             edit_gen_config: false,
@@ -136,8 +136,8 @@ impl Editor {
             .expect("expect define_egui() to be called before");
 
         f32::min(
-            canvas.width() / map.width as f32,
-            canvas.height() / map.height as f32,
+            canvas.width() / map.width() as f32,
+            canvas.height() / map.height() as f32,
         )
     }
 
@@ -217,10 +217,11 @@ impl Editor {
         let walker = Walker::new(
             Kernel::new(5, 0.0),
             Kernel::new(7, 0.0),
-            way.waypoints.clone(),
+            way.with_map_bounds(500, 500),
             prng,
             wal.clone(),
         );
+
         let map = Map::new(500, 500, BlockType::Hookable);
 
         let generator = Generator::new(map, walker, gen.clone());
@@ -247,24 +248,19 @@ impl Editor {
     }
 
     pub fn set_cam(&mut self) {
-        if let Some(gen) = &self.generator {
-            let map = &gen.map;
-            let display_factor = self.get_display_factor(map);
-            let x_view = display_factor * map.width as f32;
-            let y_view = display_factor * map.height as f32;
-            let y_shift = screen_height() - y_view;
-            let map_rect = Rect::new(0.0, 0.0, map.width as f32, map.height as f32);
-            let mut cam = Camera2D::from_display_rect(map_rect);
+        let x_view: f32 = self.canvas.unwrap().width();
+        let y_view = self.canvas.unwrap().height();
+        let y_shift = screen_height() - y_view;
+        let mut cam = Camera2D::from_display_rect(Rect::new(0.0, 0.0, x_view, y_view));
 
-            // so i guess this is (x, y, width, height) not two positions?
-            cam.viewport = Some((0, y_shift as i32, x_view as i32, y_view as i32));
+        // so i guess this is (x, y, width, height) not two positions?
+        cam.viewport = Some((0, y_shift as i32, x_view as i32, y_view as i32));
 
-            cam.target -= self.offset;
-            cam.zoom *= self.zoom;
+        cam.target -= self.offset;
+        cam.zoom *= self.zoom;
 
-            set_camera(&cam);
-            self.cam = Some(cam);
-        }
+        set_camera(&cam);
+        self.cam = Some(cam);
     }
 
     pub fn save_map_dialog(&self) {

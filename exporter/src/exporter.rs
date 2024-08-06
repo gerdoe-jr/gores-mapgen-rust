@@ -90,7 +90,7 @@ impl<'a, 'b> Exporter<'a, 'b> {
             .unwrap_mut();
 
         *game_layer = Array2::<twmap::GameTile>::from_elem(
-            (self.map.height, self.map.width),
+            (self.map.height(), self.map.width()),
             twmap::GameTile::new(0, TileFlags::empty()),
         );
 
@@ -153,7 +153,7 @@ impl<'a, 'b> Exporter<'a, 'b> {
             let automapper_config = &automapper.configs[config_index as usize];
 
             let tiles = layer.tiles_mut().unwrap_mut();
-            *tiles = Array2::<Tile>::default((self.map.height, self.map.width));
+            *tiles = Array2::<Tile>::default((self.map.height(), self.map.width()));
 
             for ((x, y), block_type) in self.map.grid.indexed_iter() {
                 let block_type = block_type.to_game_tile();
