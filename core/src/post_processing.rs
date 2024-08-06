@@ -1,4 +1,5 @@
 use crate::{
+    dt,
     map::{BlockType, Map, Overwrite},
     position::{Position, ShiftDirection},
 };
@@ -492,7 +493,7 @@ pub fn remove_freeze_blobs(map: &mut Map, min_freeze_size: usize) {
                         .slice_mut(s![x - 1..=x + 1, y - 1..=y + 1])
                         .fill(Some(true));
                 }
-                BlockType::Freeze => {},
+                BlockType::Freeze => {}
                 // skip if not a freeze block
                 _ => continue,
             }
@@ -511,7 +512,7 @@ pub fn remove_freeze_blobs(map: &mut Map, min_freeze_size: usize) {
                     || pos.y < window_size
                     || pos.x > height - window_size
                 {
-                    invalid[pos.as_index()] = Some(true);
+                    invalid[pos.as_index()] = Some(false);
 
                     continue;
                 }

@@ -1,5 +1,4 @@
 {
-  "name": "large_spiral",
   "waypoints": [
     {
       "x": 50,
@@ -97,7 +96,5 @@
       "x": 150,
       "y": 250
     }
-  ],
-  "width": 500,
-  "height": 500
+  ]
 }

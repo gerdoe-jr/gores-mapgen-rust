@@ -1,3 +1,4 @@
+pub mod config;
 pub mod editor;
 pub mod fps_control;
 pub mod gui;
@@ -53,19 +54,18 @@ async fn main() {
     let args = Args::parse();
     SimpleLogger::new().init().unwrap();
 
-    let mut editor = Editor::new(args.gen_config, args.map_config);
-    let mut fps_ctrl = FPSControl::new().with_max_fps(60);
+    let mut editor = Editor::new();
+    let mut fps_ctrl = FPSControl::new().with_max_fps(120);
 
     if args.testing {
         editor.instant = true;
-        editor.fixed_seed = true;
         editor.auto_generate = true;
         editor.edit_gen_config = true;
     }
 
     if let Some(config_name) = args.config {
-        if editor.gen_configs.contains_key(&config_name) {
-            editor.current_gen_config = config_name;
+        if editor.config.generator.all.contains_key(&config_name) {
+            editor.config.generator.current = config_name;
         }
     }
 
@@ -85,13 +85,13 @@ async fn main() {
             false => editor.steps_per_frame,
         };
 
-        if editor.gen.as_ref().is_some() {
+        if editor.generator.as_ref().is_some() {
             for _ in 0..steps {
-                if editor.is_paused() || editor.gen.as_ref().unwrap().walker.finished {
+                if editor.is_paused() || editor.generator.as_ref().unwrap().walker.finished {
                     break;
                 }
 
-                editor.gen.as_mut().unwrap().step().unwrap_or_else(|err| {
+                editor.generator.as_mut().unwrap().step().unwrap_or_else(|err| {
                     println!("Walker Step Failed: {:}", err);
                     editor.set_setup();
                 });
@@ -103,11 +103,11 @@ async fn main() {
             }
 
             // this is called ONCE after map was generated
-            if editor.gen.as_ref().unwrap().walker.finished && !editor.is_setup() {
+            if editor.generator.as_ref().unwrap().walker.finished && !editor.is_setup() {
                 // kinda crappy, but ensure that even a panic doesnt crash the program
                 let _ = panic::catch_unwind(AssertUnwindSafe(|| {
                     editor
-                        .gen
+                        .generator
                         .as_mut()
                         .unwrap()
                         .post_processing()
@@ -126,14 +126,14 @@ async fn main() {
             clear_background(WHITE);
 
             draw_chunked_grid(
-                &editor.gen.as_ref().unwrap().map.grid,
-                &editor.gen.as_ref().unwrap().map.chunks_edited,
-                editor.gen.as_ref().unwrap().map.chunk_size,
+                &editor.generator.as_ref().unwrap().map.grid,
+                &editor.generator.as_ref().unwrap().map.chunks_edited,
+                editor.generator.as_ref().unwrap().map.chunk_size,
             );
-            draw_walker_kernel(&editor.gen.as_ref().unwrap().walker, KernelType::Outer);
-            draw_walker_kernel(&editor.gen.as_ref().unwrap().walker, KernelType::Inner);
-            draw_walker(&editor.gen.as_ref().unwrap().walker);
-            draw_waypoints(&editor.cur_map_config_mut().waypoints);
+            draw_walker_kernel(&editor.generator.as_ref().unwrap().walker, KernelType::Outer);
+            draw_walker_kernel(&editor.generator.as_ref().unwrap().walker, KernelType::Inner);
+            draw_walker(&editor.generator.as_ref().unwrap().walker);
+            draw_waypoints(&editor.config.waypoints.get().waypoints);
         }
 
         egui_macroquad::draw();

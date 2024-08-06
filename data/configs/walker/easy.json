@@ -1,7 +1,4 @@
 {
-  "name": "easy",
-  "description": null,
-  "version": "1.0",
   "inner_rad_mut_prob": 0.8,
   "inner_size_mut_prob": 0.65,
   "outer_rad_mut_prob": 0.85,
@@ -15,13 +12,7 @@
       0.075
     ]
   },
-  "platform_distance_bounds": [
-    250,
-    500
-  ],
   "momentum_prob": 0.625,
-  "max_distance": 4.7,
-  "waypoint_reached_dist": 250,
   "inner_size_probs": {
     "values": [
       4,
@@ -44,16 +35,19 @@
       0.010416667
     ]
   },
-  "skip_length_bounds": [
-    3,
-    11
-  ],
-  "skip_min_spacing_sqr": 45,
-  "min_freeze_size": 0,
-  "enable_pulse": false,
-  "pulse_straight_delay": 10,
-  "pulse_corner_delay": 5,
-  "pulse_max_kernel_size": 4,
+  "circ_probs": {
+    "values": [
+      0.0,
+      0.6,
+      0.8
+    ],
+    "probs": [
+      0.75,
+      0.15,
+      0.05
+    ]
+  },
+  "pulse": null,
   "fade_steps": 90,
   "fade_max_size": 7,
   "fade_min_size": 6

@@ -1,4 +1,4 @@
-use crate::{config::MapConfig, kernel::Kernel, position::Position, walker::CuteWalker};
+use crate::{kernel::Kernel, position::Position, walker::CuteWalker};
 use ndarray::{s, Array2};
 
 const CHUNK_SIZE: usize = 5;
@@ -106,16 +106,13 @@ pub struct Map {
     pub width: usize,
     pub chunks_edited: Array2<bool>, // TODO: make this optional in case editor is not used!
     pub chunk_size: usize,
-    pub config: MapConfig
+    default_block: BlockType
 }
 
 impl Map {
-    pub fn new(config: MapConfig, default: BlockType) -> Map {
-        let width = config.width;
-        let height = config.height;
-
+    pub fn new(width: usize, height: usize, default_block: BlockType) -> Map {
         Map {
-            grid: Array2::from_elem((width, height), default),
+            grid: Array2::from_elem((width, height), default_block),
             width,
             height,
             chunks_edited: Array2::from_elem(
@@ -123,8 +120,12 @@ impl Map {
                 false,
             ),
             chunk_size: CHUNK_SIZE,
-            config
+            default_block
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.grid.fill(self.default_block)
     }
 
     pub fn apply_kernel(

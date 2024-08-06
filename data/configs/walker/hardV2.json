@@ -1,7 +1,4 @@
 {
-  "name": "hardV2",
-  "description": null,
-  "version": "1.0",
   "inner_rad_mut_prob": 1.0,
   "inner_size_mut_prob": 0.75,
   "outer_rad_mut_prob": 0.85,
@@ -15,13 +12,7 @@
       0.0784313725490196
     ]
   },
-  "platform_distance_bounds": [
-    250,
-    350
-  ],
   "momentum_prob": 0.6,
-  "max_distance": 4.0,
-  "waypoint_reached_dist": 300,
   "inner_size_probs": {
     "values": [
       1,
@@ -48,32 +39,19 @@
       0.0030960215
     ]
   },
-  "skip_length_bounds": [
-    3,
-    11
-  ],
-  "skip_min_spacing_sqr": 45,
-  "min_freeze_size": 2,
-  "waypoints": [
-    {
-      "x": 250,
-      "y": 250
-    },
-    {
-      "x": 250,
-      "y": 150
-    },
-    {
-      "x": 50,
-      "y": 150
-    },
-    {
-      "x": 50,
-      "y": 50
-    },
-    {
-      "x": 250,
-      "y": 50
-    }
-  ]
+  "circ_probs": {
+    "values": [
+      0.0,
+      0.6,
+      0.8
+    ],
+    "probs": [
+      0.75,
+      0.15,
+      0.05
+    ]
+  },
+  "fade_steps": 60,
+  "fade_max_size": 6,
+  "fade_min_size": 3
 }

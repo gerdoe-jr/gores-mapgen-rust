@@ -1,11 +1,68 @@
 use crate::{
-    config::{GenerationConfig, MapConfig},
     generator,
     kernel::Kernel,
     map::{BlockType, Map, Overwrite},
     position::{Position, ShiftDirection},
-    random::Random,
+    random::{Random, RandomDistConfig},
 };
+
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct WalkerParams {
+    /// probability for mutating inner radius
+    pub inner_rad_mut_prob: f32,
+
+    /// probability for mutating inner size
+    pub inner_size_mut_prob: f32,
+
+    /// probability for mutating outer radius
+    pub outer_rad_mut_prob: f32,
+
+    /// probability for mutating outer size
+    pub outer_size_mut_prob: f32,
+
+    /// probability weighting for random selection from best to worst towards next goal
+    pub shift_weights: RandomDistConfig<ShiftDirection>,
+
+    /// probability for doing the last shift direction again
+    pub momentum_prob: f32,
+
+    /// probabilities for (inner_kernel_size, probability)
+    pub inner_size_probs: RandomDistConfig<usize>,
+
+    /// probabilities for (outer_kernel_margin, probability)
+    pub outer_margin_probs: RandomDistConfig<usize>,
+
+    /// probabilities for (kernel circularity, probability)
+    pub circ_probs: RandomDistConfig<f32>,
+
+    /// enable pulse
+    pub pulse: Option<Pulse>,
+
+    /// number of initial walker steps to perform fading. Will fade from max to min kernel size.
+    pub fade_steps: usize,
+
+    /// initial max kernel size for fading
+    pub fade_max_size: usize,
+
+    /// goal min kernel size for fading
+    pub fade_min_size: usize,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Pulse {
+    /// TODO:
+    pub straight_delay: usize,
+    pub corner_delay: usize,
+    pub max_kernel_size: usize,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Waypoints {
+    pub waypoints: Vec<Position>,
+}
 
 // this walker is indeed very cute
 #[derive(Debug)]
@@ -27,28 +84,38 @@ pub struct CuteWalker {
 
     /// counts how many steps the pulse constraints have been fulfilled
     pub pulse_counter: usize,
+
+    pub prng: Random,
+    pub params: WalkerParams,
 }
 
 impl CuteWalker {
     pub fn new(
-        initial_pos: Position,
         inner_kernel: Kernel,
         outer_kernel: Kernel,
-        map_config: &MapConfig,
+        waypoints: Vec<Position>,
+        prng: Random,
+        params: WalkerParams,
     ) -> CuteWalker {
         CuteWalker {
-            pos: initial_pos,
+            pos: waypoints[0],
             steps: 0,
             inner_kernel,
             outer_kernel,
-            goal: Some(map_config.waypoints.first().unwrap().clone()),
+            goal: Some(*waypoints.first().unwrap()),
             goal_index: 0,
-            waypoints: map_config.waypoints.clone(),
+            waypoints: waypoints,
             finished: false,
             steps_since_platform: 0,
             last_shift: None,
             pulse_counter: 0,
+            prng,
+            params,
         }
+    }
+
+    pub fn initial_pos(&self) -> Position {
+        self.waypoints[0]
     }
 
     pub fn is_goal_reached(&self, waypoint_reached_dist: usize) -> Option<bool> {
@@ -110,12 +177,7 @@ impl CuteWalker {
         Ok(())
     }
 
-    pub fn probabilistic_step(
-        &mut self,
-        map: &mut Map,
-        config: &GenerationConfig,
-        rnd: &mut Random,
-    ) -> Result<(), &'static str> {
+    pub fn probabilistic_step(&mut self, map: &mut Map) -> Result<(), &'static str> {
         if self.finished {
             return Err("Walker is finished");
         }
@@ -124,12 +186,12 @@ impl CuteWalker {
         let goal = self.goal.as_ref().ok_or("Error: Goal is None")?;
         let shifts = self.pos.get_rated_shifts(goal, map);
 
-        let mut current_shift = rnd.sample_shift(&shifts);
+        let mut current_shift = self.prng.sample_shift(&shifts);
 
         let same_dir = match self.last_shift {
             Some(last_shift) => {
                 // Momentum: re-use last shift direction
-                if rnd.with_probability(config.momentum_prob) {
+                if self.prng.with_probability(self.params.momentum_prob) {
                     current_shift = last_shift;
                 }
 
@@ -143,41 +205,47 @@ impl CuteWalker {
         self.pos.shift_in_direction(current_shift, map)?;
         self.steps += 1;
 
-        // perform pulse if direction changed and config constraints allows it
-        let perform_pulse = config.enable_pulse
-            && ((same_dir && self.pulse_counter > config.pulse_straight_delay)
-                || (!same_dir && self.pulse_counter > config.pulse_corner_delay));
+        let mut pulsate = false;
 
-        if perform_pulse {
-            self.pulse_counter = 0; // reset pulse counter
-            map.apply_kernel(
-                self,
-                &Kernel::new(&self.inner_kernel.size + 4, 0.0),
-                BlockType::Freeze,
-            )?;
-            map.apply_kernel(
-                self,
-                &Kernel::new(&self.inner_kernel.size + 2, 0.0),
-                BlockType::Empty,
-            )?;
-        } else {
+        // perform pulse if direction changed and self.params constraints allows it
+        if let Some(pulse) = &self.params.pulse {
+            if (same_dir && self.pulse_counter > pulse.straight_delay)
+                || (!same_dir && self.pulse_counter > pulse.corner_delay)
+            {
+                self.pulse_counter = 0; // reset pulse counter
+                map.apply_kernel(
+                    self,
+                    &Kernel::new(&self.inner_kernel.size + 4, 0.0),
+                    BlockType::Freeze,
+                )?;
+                map.apply_kernel(
+                    self,
+                    &Kernel::new(&self.inner_kernel.size + 2, 0.0),
+                    BlockType::Empty,
+                )?;
+
+                pulsate = true;
+            }
+
+            if same_dir && self.inner_kernel.size <= pulse.max_kernel_size {
+                self.pulse_counter += 1;
+            } else {
+                self.pulse_counter = 0;
+            };
+        }
+
+        if !pulsate {
             map.apply_kernel(self, &self.outer_kernel, BlockType::Freeze)?;
 
-            let empty = if self.steps < config.fade_steps {
+            let empty = if self.steps < self.params.fade_steps {
                 BlockType::EmptyReserved
             } else {
                 BlockType::Empty
             };
             map.apply_kernel(self, &self.inner_kernel, empty)?;
-        };
+        }
 
         // apply kernels
-
-        if same_dir && self.inner_kernel.size <= config.pulse_max_kernel_size {
-            self.pulse_counter += 1;
-        } else {
-            self.pulse_counter = 0;
-        };
 
         self.last_shift = Some(current_shift.clone());
 
@@ -189,21 +257,21 @@ impl CuteWalker {
     }
 
     /// fades kernel size from max_size to min_size for fade_steps
-    pub fn set_fade_kernel(
-        &mut self,
-        step: usize,
-        min_size: usize,
-        max_size: usize,
-        fade_steps: usize,
-    ) {
-        let slope = (min_size as f32 - max_size as f32) / fade_steps as f32;
-        let kernel_size_f = (step as f32) * slope + max_size as f32;
+    fn set_fade_kernel(&mut self) {
+        let slope = (self.params.fade_min_size as f32 - self.params.fade_max_size as f32)
+            / self.params.fade_steps as f32;
+        let kernel_size_f = (self.steps as f32) * slope + self.params.fade_max_size as f32;
         let kernel_size = kernel_size_f.floor() as usize;
         self.inner_kernel = Kernel::new(kernel_size, 0.0);
         self.outer_kernel = Kernel::new(kernel_size + 2, 0.0);
     }
 
-    pub fn mutate_kernel(&mut self, config: &GenerationConfig, rnd: &mut Random) {
+    pub fn mutate_kernel(&mut self) {
+        if self.steps <= self.params.fade_steps {
+            self.set_fade_kernel();
+            return;
+        }
+
         let mut inner_size = self.inner_kernel.size;
         let mut inner_circ = self.inner_kernel.circularity;
         let mut outer_size = self.outer_kernel.size;
@@ -211,32 +279,32 @@ impl CuteWalker {
         let mut outer_margin = outer_size - inner_size;
         let mut modified = false;
 
-        if rnd.with_probability(config.inner_size_mut_prob) {
-            inner_size = rnd.sample_inner_kernel_size();
+        if self.prng.with_probability(self.params.inner_size_mut_prob) {
+            inner_size = self.prng.sample_inner_kernel_size();
             modified = true;
         } else {
-            rnd.skip_n(2); // for some reason sampling requires two values?
+            self.prng.skip_n(2); // for some reason sampling requires two values?
         }
 
-        if rnd.with_probability(config.outer_size_mut_prob) {
-            outer_margin = rnd.sample_outer_kernel_margin();
+        if self.prng.with_probability(self.params.outer_size_mut_prob) {
+            outer_margin = self.prng.sample_outer_kernel_margin();
             modified = true;
         } else {
-            rnd.skip_n(2);
+            self.prng.skip_n(2);
         }
 
-        if rnd.with_probability(config.inner_rad_mut_prob) {
-            inner_circ = rnd.sample_circularity();
+        if self.prng.with_probability(self.params.inner_rad_mut_prob) {
+            inner_circ = self.prng.sample_circularity();
             modified = true;
         } else {
-            rnd.skip_n(2);
+            self.prng.skip_n(2);
         }
 
-        if rnd.with_probability(config.outer_rad_mut_prob) {
-            outer_circ = rnd.sample_circularity();
+        if self.prng.with_probability(self.params.outer_rad_mut_prob) {
+            outer_circ = self.prng.sample_circularity();
             modified = true;
         } else {
-            rnd.skip_n(2);
+            self.prng.skip_n(2);
         }
 
         outer_size = inner_size + outer_margin;

@@ -1,5 +1,5 @@
 [package]
-name = "gui"
+name = "editor"
 version = "0.1.0"
 edition = "2021"
 
@@ -23,5 +23,5 @@ simple_logger = "5.0.0"
 ndarray = "0.15.6"
 twmap = "0.12.0"
 
-mapgen_core = { package = "core", path = "../core" }
+mapgen_core = { package = "core", path = "../core", features = [ "serde" ] }
 mapgen_exporter = { package = "exporter", path = "../exporter" }

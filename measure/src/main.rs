@@ -1,8 +1,9 @@
+use std::{collections::HashMap, error::Error, fs, path::Path};
+
 use mapgen_core::{
-    config::{load_configs_from_dir, GenerationConfig, MapConfig},
-    generator::Generator,
-    random::Seed,
+    generator::{Generator, GeneratorParams}, kernel::Kernel, map::{BlockType, Map}, random::{Random, RandomDist, Seed}, walker::{CuteWalker, WalkerParams, Waypoints}
 };
+use serde::de::DeserializeOwned;
 
 const SILENT: bool = true;
 const LAST_SEED: u64 = 100_000; // u64::MAX
@@ -10,16 +11,33 @@ const LAST_SEED: u64 = 100_000; // u64::MAX
 fn main() {
     use std::time::Instant;
 
-    let gen_config = load_configs_from_dir::<GenerationConfig, _>("../data/configs/gen")
-        .unwrap()
-        .get("insaneV2")
-        .unwrap()
-        .clone();
-    let map_config = load_configs_from_dir::<MapConfig, _>("../data/configs/map")
-        .unwrap()
-        .get("hor_line")
-        .unwrap()
-        .clone();
+    let gen = load_configs_from_dir::<GeneratorParams, _>("../data/configs/generator")
+        .unwrap()["insaneV2"];
+
+    let wal = load_configs_from_dir::<WalkerParams, _>("../data/configs/walker")
+        .unwrap()["insaneV2"].clone();
+
+    let way = load_configs_from_dir::<Waypoints, _>("../data/configs/waypoints")
+        .unwrap()["hor_line"].clone();
+
+    let prng = Random::new(
+        Seed::random(),
+        RandomDist::new(wal.shift_weights.clone()),
+        RandomDist::new(wal.outer_margin_probs.clone()),
+        RandomDist::new(wal.inner_size_probs.clone()),
+        RandomDist::new(wal.circ_probs.clone()),
+    );
+
+    let walker = CuteWalker::new(
+        Kernel::new(5, 0.0),
+        Kernel::new(7, 0.0),
+        way.waypoints.clone(),
+        prng,
+        wal.clone(),
+    );
+
+    let map = Map::new(300, 150, BlockType::Hookable);
+    let mut generator = Generator::new(map, walker, gen);
 
     let now = Instant::now();
 
@@ -29,12 +47,7 @@ fn main() {
                 print!("processing {}", seed);
             }
 
-            let result = Generator::generate_map(
-                200_000,
-                Seed::from_u64(seed),
-                gen_config.clone(),
-                map_config.clone(),
-            );
+            let result = generator.finalize(200_000);
 
             if !SILENT {
                 match result {
@@ -42,10 +55,35 @@ fn main() {
                     _ => println!(": success"),
                 }
             }
+            
+            generator.map.clear();
         }
     }
 
     let elapsed = now.elapsed();
 
     println!("elapsed {:.2?}", elapsed);
+}
+
+pub fn load_configs_from_dir<C, P>(path: P) -> Result<HashMap<String, C>, Box<dyn Error>>
+where
+    C: DeserializeOwned,
+    P: AsRef<Path>,
+{
+    let mut configs = HashMap::new();
+
+    for file_path in fs::read_dir(path)? {
+        let file_path = file_path?.path();
+        let osstr_file_name = file_path.file_name().unwrap(); // it will never be None since "Returns None if the path terminates in .."
+        let file_name = osstr_file_name
+            .to_str()
+            .unwrap() // believe to user that it will be valid utf8, what an asshole will use utf16 for fucking generator config name?
+            .replace(".json", "");
+
+        let data = fs::read_to_string(&file_path).unwrap();
+
+        configs.insert(file_name.to_string(), serde_json::from_str::<C>(&data)?);
+    }
+
+    Ok(configs)
 }

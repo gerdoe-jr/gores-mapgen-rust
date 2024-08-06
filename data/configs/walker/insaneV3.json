@@ -1,7 +1,4 @@
 {
-  "name": "insaneV3",
-  "description": null,
-  "version": "1.0",
   "inner_rad_mut_prob": 0.6,
   "inner_size_mut_prob": 1.0,
   "outer_rad_mut_prob": 0.45,
@@ -15,13 +12,7 @@
       0.03508771929824561
     ]
   },
-  "platform_distance_bounds": [
-    250,
-    350
-  ],
   "momentum_prob": 0.7,
-  "max_distance": 2.2,
-  "waypoint_reached_dist": 300,
   "inner_size_probs": {
     "values": [
       1,
@@ -44,16 +35,23 @@
       0.052631583
     ]
   },
-  "skip_length_bounds": [
-    4,
-    12
-  ],
-  "skip_min_spacing_sqr": 21,
-  "min_freeze_size": 10,
-  "enable_pulse": true,
-  "pulse_straight_delay": 10,
-  "pulse_corner_delay": 3,
-  "pulse_max_kernel_size": 1,
+  "circ_probs": {
+    "values": [
+      0.0,
+      0.6,
+      0.8
+    ],
+    "probs": [
+      0.75,
+      0.15,
+      0.05
+    ]
+  },
+  "pulse": {
+    "straight_delay": 10,
+    "corner_delay": 3,
+    "max_kernel_size": 1
+  },
   "fade_steps": 60,
   "fade_max_size": 6,
   "fade_min_size": 3

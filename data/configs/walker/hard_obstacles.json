@@ -1,7 +1,4 @@
 {
-  "name": "hard_obstacles",
-  "description": null,
-  "version": "1.0",
   "inner_rad_mut_prob": 1.0,
   "inner_size_mut_prob": 0.75,
   "outer_rad_mut_prob": 0.85,
@@ -15,13 +12,7 @@
       0.0784313725490196
     ]
   },
-  "platform_distance_bounds": [
-    250,
-    350
-  ],
   "momentum_prob": 0.6,
-  "max_distance": 2.5,
-  "waypoint_reached_dist": 300,
   "inner_size_probs": {
     "values": [
       1,
@@ -50,10 +41,20 @@
       0.0030960215
     ]
   },
-  "skip_length_bounds": [
-    0,
-    15
-  ],
-  "skip_min_spacing_sqr": 9,
-  "min_freeze_size": 2
+  "circ_probs": {
+    "values": [
+      0.0,
+      0.6,
+      0.8
+    ],
+    "probs": [
+      0.75,
+      0.15,
+      0.05
+    ]
+  },
+  "pulse": null,
+  "fade_steps": 60,
+  "fade_max_size": 6,
+  "fade_min_size": 3
 }

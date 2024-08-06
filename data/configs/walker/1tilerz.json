@@ -1,7 +1,4 @@
 {
-  "name": "1tilerz",
-  "description": null,
-  "version": "1.0",
   "inner_rad_mut_prob": 1.0,
   "inner_size_mut_prob": 0.2,
   "outer_rad_mut_prob": 0.2,
@@ -15,13 +12,7 @@
       0.06451612903225806
     ]
   },
-  "platform_distance_bounds": [
-    100,
-    100
-  ],
   "momentum_prob": 0.72,
-  "max_distance": 4.0,
-  "waypoint_reached_dist": 300,
   "inner_size_probs": {
     "values": [
       1
@@ -38,16 +29,23 @@
       1.0
     ]
   },
-  "skip_length_bounds": [
-    3,
-    25
-  ],
-  "skip_min_spacing_sqr": 45,
-  "min_freeze_size": 2,
-  "enable_pulse": true,
-  "pulse_straight_delay": 20,
-  "pulse_corner_delay": 2,
-  "pulse_max_kernel_size": 4,
+  "circ_probs": {
+    "values": [
+      0.0,
+      0.6,
+      0.8
+    ],
+    "probs": [
+      0.75,
+      0.15,
+      0.05
+    ]
+  },
+  "pulse": {
+    "straight_delay": 20,
+    "corner_delay": 2,
+    "max_kernel_size": 4
+  },
   "fade_steps": 30,
   "fade_max_size": 5,
   "fade_min_size": 2

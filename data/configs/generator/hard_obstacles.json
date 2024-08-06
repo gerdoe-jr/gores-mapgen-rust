@@ -1,0 +1,14 @@
+{
+  "platform_distance_bounds": [
+    250,
+    350
+  ],
+  "max_distance": 2.5,
+  "waypoint_reached_dist": 300,
+  "skip_length_bounds": [
+    0,
+    15
+  ],
+  "skip_min_spacing_sqr": 9,
+  "min_freeze_size": 2
+}

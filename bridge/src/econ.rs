@@ -22,7 +22,7 @@ impl Econ {
 
         Ok(Self {
             connection,
-            buffer: Vec::with_capacity(buffer_size),
+            buffer: vec![0; buffer_size],
             lines: Vec::new(),
             unfinished_line: String::new(),
             authed: false,
@@ -30,8 +30,15 @@ impl Econ {
     }
 
     pub fn auth(&mut self, password: &str) -> bool {
-        self.read().unwrap(); // "Enter password:"
-        self.lines.clear();
+        let mut found = false;
+        while !found && self.read().is_ok()  {
+            while let Some(new_line) = self.pop_line() {
+                if new_line == "Enter password:" {
+                    found = true;
+                    break;
+                }
+            }
+        }
 
         self.send_rcon_cmd(password).unwrap();
 

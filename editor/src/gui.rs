@@ -1,11 +1,11 @@
-use std::fs::File;
-use std::io::Write;
 use std::{collections::HashMap, env, isize};
 
-use egui::RichText;
-use mapgen_core::config::{GenerationConfig, MapConfig};
+use egui::{ComboBox, RichText, ScrollArea};
+use mapgen_core::random::Seed;
+use mapgen_core::walker::Pulse;
 use tinyfiledialogs;
 
+use crate::config::save_config;
 use crate::editor::{window_frame, Editor};
 use egui::Context;
 use egui::{CollapsingHeader, Label, Ui};
@@ -291,7 +291,9 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
             });
 
             ui.horizontal(|ui| {
-                ui.checkbox(&mut editor.fixed_seed, "fixed seed");
+                if ui.button("random seed").clicked() {
+                    editor.user_seed = Seed::random();
+                }
                 if ui.button("save map").clicked() {
                     editor.save_map_dialog();
                 }
@@ -320,82 +322,143 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
             //         editor.gen_config = GenerationConfig::load(&path_in);
             //     }
             // }
-            if ui.button("gen config").clicked() {
+            if ui.button("generator").clicked() {
                 let cwd = env::current_dir().unwrap();
 
                 let initial_path = cwd
-                    .join(editor.current_gen_config.clone() + ".json")
+                    .join(editor.config.generator.current.clone() + ".json")
                     .to_string_lossy()
                     .to_string();
 
-                if let Some(path_out) =
-                    tinyfiledialogs::save_file_dialog("save gen config", &initial_path)
-                {
-                    save_gen_config(editor.cur_gen_config_mut(), &path_out);
+                if let Some(path_out) = tinyfiledialogs::save_file_dialog("save generator config", &initial_path) {
+                    save_config(editor.config.generator.get(), &path_out).unwrap();
                 }
             };
 
-            if ui.button("map config").clicked() {
+            if ui.button("walker").clicked() {
                 let cwd = env::current_dir().unwrap();
 
                 let initial_path = cwd
-                    .join(editor.current_map_config.clone() + ".json")
+                    .join(editor.config.walker.current.clone() + ".json")
                     .to_string_lossy()
                     .to_string();
 
                 if let Some(path_out) =
-                    tinyfiledialogs::save_file_dialog("save map config", &initial_path)
+                    tinyfiledialogs::save_file_dialog("save walker config", &initial_path)
                 {
-                    save_map_config(editor.cur_map_config_mut(), &path_out);
+                    save_config(editor.config.walker.get(), &path_out).unwrap();
+                }
+            };
+
+            if ui.button("waypoints").clicked() {
+                let cwd = env::current_dir().unwrap();
+
+                let initial_path = cwd
+                    .join(editor.config.waypoints.current.clone() + ".json")
+                    .to_string_lossy()
+                    .to_string();
+
+                if let Some(path_out) =
+                    tinyfiledialogs::save_file_dialog("save waypoints config", &initial_path)
+                {
+                    save_config(editor.config.waypoints.get(), &path_out).unwrap();
                 }
             };
         });
 
-        ui.label("load generation config:");
-        egui::ComboBox::from_label("")
-            .selected_text(format!("{:}", editor.current_gen_config))
+        ComboBox::from_label("load generator config:")
+            .selected_text(format!("{:}", editor.config.generator.current))
             .show_ui(ui, |ui| {
-                for (name, _cfg) in editor.gen_configs.iter() {
-                    ui.selectable_value(&mut editor.current_gen_config, name.clone(), name);
+                for (name, _cfg) in editor.config.generator.all.iter() {
+                    ui.selectable_value(&mut editor.config.generator.current, name.clone(), name);
                 }
             });
-        ui.label("load map config:");
-        egui::ComboBox::from_label(" ")
-            .selected_text(format!("{:}", editor.current_map_config))
+        ComboBox::from_label("load walker config:")
+            .selected_text(format!("{:}", editor.config.walker.current))
             .show_ui(ui, |ui| {
-                for (name, _cfg) in editor.map_configs.iter() {
-                    ui.selectable_value(&mut editor.current_map_config, name.clone(), name);
+                for (name, _cfg) in editor.config.walker.all.iter() {
+                    ui.selectable_value(&mut editor.config.walker.current, name.clone(), name);
+                }
+            });
+        ComboBox::from_label("load waypoints config:")
+            .selected_text(format!("{:}", editor.config.waypoints.current))
+            .show_ui(ui, |ui| {
+                for (name, _cfg) in editor.config.waypoints.all.iter() {
+                    ui.selectable_value(&mut editor.config.waypoints.current, name.clone(), name);
                 }
             });
 
         ui.horizontal(|ui| {
-            ui.checkbox(&mut editor.edit_gen_config, "edit gen");
-            ui.checkbox(&mut editor.edit_map_config, "edit map");
+            ui.checkbox(&mut editor.edit_gen_config, "edit generation");
+            ui.checkbox(&mut editor.edit_wal_config, "edit walker");
+            ui.checkbox(&mut editor.edit_way_config, "edit waypoints");
         });
 
-        egui::ScrollArea::vertical().show(ui, |ui| {
+        ScrollArea::vertical().show(ui, |ui| {
             // =======================================[ GENERATION CONFIG EDIT ]===================================
             if editor.edit_gen_config {
                 ui.separator();
 
                 field_edit_widget(
                     ui,
-                    &mut editor.current_gen_config,
-                    edit_string,
-                    "name",
-                    false,
+                    &mut editor.config.generator.get_mut().platform_distance_bounds,
+                    edit_range_usize,
+                    "platform distances",
+                    true,
+                );
+                field_edit_widget(
+                    ui,
+                    &mut editor.config.generator.get_mut().max_distance,
+                    edit_f32_wtf,
+                    "max distance",
+                    true,
                 );
 
                 field_edit_widget(
                     ui,
-                    &mut editor.cur_gen_config_mut().inner_rad_mut_prob,
+                    &mut editor.config.generator.get_mut().waypoint_reached_dist,
+                    edit_usize,
+                    "waypoint reached dist",
+                    true,
+                );
+
+                field_edit_widget(
+                    ui,
+                    &mut editor.config.generator.get_mut().skip_length_bounds,
+                    edit_range_usize,
+                    "skip length bounds",
+                    true,
+                );
+
+                field_edit_widget(
+                    ui,
+                    &mut editor.config.generator.get_mut().skip_min_spacing_sqr,
+                    edit_usize,
+                    "skip min spacing sqr",
+                    true,
+                );
+
+                field_edit_widget(
+                    ui,
+                    &mut editor.config.generator.get_mut().min_freeze_size,
+                    edit_usize,
+                    "min freeze size",
+                    false,
+                );
+            }
+
+            // =======================================[ WALKER CONFIG EDIT ]===================================
+            if editor.edit_wal_config {
+                field_edit_widget(
+                    ui,
+                    &mut editor.config.walker.get_mut().inner_rad_mut_prob,
                     edit_f32_prob,
                     "inner rad mut prob",
                     true,
                 );
                 field_edit_widget(
                     ui,
-                    &mut editor.cur_gen_config_mut().inner_size_mut_prob,
+                    &mut editor.config.walker.get_mut().inner_size_mut_prob,
                     edit_f32_prob,
                     "inner size mut prob",
                     true,
@@ -403,23 +466,42 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
 
                 field_edit_widget(
                     ui,
-                    &mut editor.cur_gen_config_mut().outer_rad_mut_prob,
+                    &mut editor.config.walker.get_mut().outer_rad_mut_prob,
                     edit_f32_prob,
                     "outer rad mut prob",
                     true,
                 );
                 field_edit_widget(
                     ui,
-                    &mut editor.cur_gen_config_mut().outer_size_mut_prob,
+                    &mut editor.config.walker.get_mut().outer_size_mut_prob,
                     edit_f32_prob,
                     "outer size mut prob",
+                    true,
+                );
+
+                field_edit_widget(
+                    ui,
+                    &mut editor.config.walker.get_mut().momentum_prob,
+                    edit_f32_prob,
+                    "momentum prob",
                     true,
                 );
 
                 ui.add_enabled_ui(editor.is_setup(), |ui| {
                     random_dist_cfg_edit(
                         ui,
-                        &mut editor.cur_gen_config_mut().inner_size_probs,
+                        &mut editor.config.walker.get_mut().shift_weights,
+                        None::<fn(&mut Ui, &mut ShiftDirection)>, // TODO: this is stupid wtwf
+                        "step weights",
+                        false,
+                        true,
+                    );
+                });
+
+                ui.add_enabled_ui(editor.is_setup(), |ui| {
+                    random_dist_cfg_edit(
+                        ui,
+                        &mut editor.config.walker.get_mut().inner_size_probs,
                         Some(edit_usize),
                         "inner size probs",
                         true,
@@ -428,7 +510,7 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
 
                     random_dist_cfg_edit(
                         ui,
-                        &mut editor.cur_gen_config_mut().outer_margin_probs,
+                        &mut editor.config.walker.get_mut().outer_margin_probs,
                         Some(edit_usize),
                         "outer margin probs",
                         true,
@@ -437,7 +519,7 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
 
                     random_dist_cfg_edit(
                         ui,
-                        &mut editor.cur_gen_config_mut().circ_probs,
+                        &mut editor.config.walker.get_mut().circ_probs,
                         Some(edit_f32_prob),
                         "circularity probs",
                         true,
@@ -445,108 +527,54 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
                     );
                 });
 
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().platform_distance_bounds,
-                    edit_range_usize,
-                    "platform distances",
-                    true,
-                );
+                let pulse_enabled = editor.config.walker.get_mut().pulse.is_some();
+                let pulse_button = if !pulse_enabled {
+                    "enable pulse"
+                } else {
+                    "disable pulse"
+                };
 
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().momentum_prob,
-                    edit_f32_prob,
-                    "momentum prob",
-                    true,
-                );
+                if ui.button(pulse_button).clicked() {
+                    if pulse_enabled {
+                        editor.config.walker.get_mut().pulse = None;
+                    } else {
+                        editor.config.walker.get_mut().pulse = Some(Pulse {
+                            straight_delay: 10,
+                            corner_delay: 5,
+                            max_kernel_size: 1,
+                        });
+                    }
+                }
 
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().max_distance,
-                    edit_f32_wtf,
-                    "max distance",
-                    true,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().waypoint_reached_dist,
-                    edit_usize,
-                    "waypoint reached dist",
-                    true,
-                );
-
-                ui.add_enabled_ui(editor.is_setup(), |ui| {
-                    random_dist_cfg_edit(
+                if let Some(pulse) = &mut editor.config.walker.get_mut().pulse {
+                    field_edit_widget(
                         ui,
-                        &mut editor.cur_gen_config_mut().shift_weights,
-                        None::<fn(&mut Ui, &mut ShiftDirection)>, // TODO: this is stupid wtwf
-                        "step weights",
-                        false,
+                        &mut pulse.straight_delay,
+                        edit_usize,
+                        "pulse straight delay",
                         true,
                     );
-                });
+    
+                    field_edit_widget(
+                        ui,
+                        &mut pulse.corner_delay,
+                        edit_usize,
+                        "pulse corner delay",
+                        false,
+                    );
+    
+                    field_edit_widget(
+                        ui,
+                        &mut pulse.max_kernel_size,
+                        edit_usize,
+                        "pulse max kernel",
+                        false,
+                    );
+                }
 
                 field_edit_widget(
                     ui,
-                    &mut editor.cur_gen_config_mut().skip_length_bounds,
-                    edit_range_usize,
-                    "skip length bounds",
-                    true,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().skip_min_spacing_sqr,
-                    edit_usize,
-                    "skip min spacing sqr",
-                    true,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().min_freeze_size,
-                    edit_usize,
-                    "min freeze size",
-                    false,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().enable_pulse,
-                    edit_bool,
-                    "enable pulse",
-                    false,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().pulse_straight_delay,
-                    edit_usize,
-                    "pulse straight delay",
-                    true,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().pulse_corner_delay,
-                    edit_usize,
-                    "pulse corner delay",
-                    false,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().pulse_max_kernel_size,
-                    edit_usize,
-                    "pulse max kernel",
-                    false,
-                );
-
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_gen_config_mut().fade_steps,
+                    &mut editor.config.walker.get_mut().fade_steps,
                     edit_usize,
                     "fade steps",
                     false,
@@ -554,7 +582,7 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
 
                 field_edit_widget(
                     ui,
-                    &mut editor.cur_gen_config_mut().fade_max_size,
+                    &mut editor.config.walker.get_mut().fade_max_size,
                     edit_usize,
                     "fade max size",
                     false,
@@ -562,40 +590,19 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
 
                 field_edit_widget(
                     ui,
-                    &mut editor.cur_gen_config_mut().fade_min_size,
+                    &mut editor.config.walker.get_mut().fade_min_size,
                     edit_usize,
                     "fade min size",
                     false,
                 );
             }
 
-            // =======================================[ MAP CONFIG EDIT ]===================================
-            if editor.edit_map_config {
-                field_edit_widget(
-                    ui,
-                    &mut editor.current_map_config,
-                    edit_string,
-                    "name",
-                    false,
-                );
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_map_config_mut().width,
-                    edit_usize,
-                    "map width",
-                    true,
-                );
-                field_edit_widget(
-                    ui,
-                    &mut editor.cur_map_config_mut().height,
-                    edit_usize,
-                    "map height",
-                    true,
-                );
+            // =======================================[ WAYPOINTS CONFIG EDIT ]===================================
+            if editor.edit_way_config {
                 ui.add_enabled_ui(editor.is_setup(), |ui| {
                     vec_edit_widget(
                         ui,
-                        &mut editor.cur_map_config_mut().waypoints,
+                        &mut editor.config.waypoints.get_mut().waypoints,
                         edit_position,
                         "waypoints",
                         true,
@@ -620,24 +627,15 @@ pub fn debug_window(ctx: &Context, editor: &mut Editor) {
             ui.add(Label::new(format!("seed: {:?}", editor.user_seed)));
             ui.add(Label::new(format!(
                 "config: {:?}",
-                &editor.current_gen_config
+                &editor.config.generator.current
             )));
-            if let Some(gen) = &editor.gen {
-                ui.add(Label::new(format!("walker: {:?}", &gen.walker)));
-            }
+            ui.add(Label::new(format!(
+                "config: {:?}",
+                &editor.config.walker.current
+            )));
+            ui.add(Label::new(format!(
+                "config: {:?}",
+                &editor.config.waypoints.current
+            )));
         });
-}
-
-fn save_map_config(config: &MapConfig, path: &str) {
-    let mut file = File::create(path).expect("failed to create config file");
-    let serialized = serde_json::to_string_pretty(config).expect("failed to serialize config");
-    file.write_all(serialized.as_bytes())
-        .expect("failed to write to config file");
-}
-
-fn save_gen_config(config: &GenerationConfig, path: &str) {
-    let mut file = File::create(path).expect("failed to create config file");
-    let serialized = serde_json::to_string_pretty(config).expect("failed to serialize config");
-    file.write_all(serialized.as_bytes())
-        .expect("failed to write to config file");
 }

@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 use crate::map::Map;
 use std::usize;
 
@@ -7,13 +5,15 @@ use std::usize;
 //
 // while glam has nice performance benefits, the amount of expensive operations
 // on the position vector will be very limited, so this should be fine..
-#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Position {
     pub x: usize,
     pub y: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ShiftDirection {
     #[default]
     Up = 0,

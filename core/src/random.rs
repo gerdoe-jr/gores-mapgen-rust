@@ -1,12 +1,11 @@
-use crate::config::GenerationConfig;
 use crate::position::ShiftDirection;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use rand_distr::WeightedAliasIndex;
 use seahash::hash;
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RandomDistConfig<T> {
     pub values: Option<Vec<T>>,
     pub probs: Vec<f32>,
@@ -39,6 +38,7 @@ impl<T> RandomDistConfig<T> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct RandomDist<T> {
     rnd_cfg: RandomDistConfig<T>,
     rnd_dist: WeightedAliasIndex<f32>,
@@ -58,15 +58,6 @@ impl<T: Clone> RandomDist<T> {
             rnd_cfg: config,
         }
     }
-}
-
-pub struct Random {
-    pub seed: Seed,
-    gen: SmallRng,
-    shift_dist: RandomDist<ShiftDirection>,
-    inner_kernel_size_dist: RandomDist<usize>,
-    outer_kernel_margin_dist: RandomDist<usize>,
-    circ_dist: RandomDist<f32>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -93,21 +84,36 @@ impl Seed {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Random {
+    pub seed: Seed,
+    gen: SmallRng,
+    shift: RandomDist<ShiftDirection>,
+    kernel_size: RandomDist<usize>,
+    kernel_margin: RandomDist<usize>,
+    circularity: RandomDist<f32>,
+}
+
 impl Random {
-    pub fn new(seed: Seed, config: &GenerationConfig) -> Random {
+    pub fn new(
+        seed: Seed,
+        shift: RandomDist<ShiftDirection>,
+        kernel_margin: RandomDist<usize>,
+        kernel_size: RandomDist<usize>,
+        circularity: RandomDist<f32>,
+    ) -> Self {
         Random {
             gen: SmallRng::seed_from_u64(seed.0),
             seed,
-            shift_dist: RandomDist::new(config.shift_weights.clone()),
-            outer_kernel_margin_dist: RandomDist::new(config.outer_margin_probs.clone()),
-            inner_kernel_size_dist: RandomDist::new(config.inner_size_probs.clone()),
-            circ_dist: RandomDist::new(config.circ_probs.clone()),
-            // TODO: clones here fine?
+            shift,
+            kernel_margin,
+            kernel_size,
+            circularity,
         }
     }
 
     pub fn sample_inner_kernel_size(&mut self) -> usize {
-        let dist = &self.inner_kernel_size_dist;
+        let dist = &self.kernel_size;
         let index = dist.rnd_dist.sample(&mut self.gen);
         dist.rnd_cfg
             .values
@@ -119,7 +125,7 @@ impl Random {
     }
 
     pub fn sample_outer_kernel_margin(&mut self) -> usize {
-        let dist = &self.outer_kernel_margin_dist;
+        let dist = &self.kernel_margin;
         let index = dist.rnd_dist.sample(&mut self.gen);
         dist.rnd_cfg
             .values
@@ -131,7 +137,7 @@ impl Random {
     }
 
     pub fn sample_circularity(&mut self) -> f32 {
-        let dist = &self.circ_dist;
+        let dist = &self.circularity;
         let index = dist.rnd_dist.sample(&mut self.gen);
         dist.rnd_cfg
             .values
@@ -143,7 +149,7 @@ impl Random {
     }
 
     pub fn sample_shift(&mut self, ordered_shifts: &[ShiftDirection; 4]) -> ShiftDirection {
-        let dist = &self.shift_dist;
+        let dist = &self.shift;
         let index = dist.rnd_dist.sample(&mut self.gen);
         ordered_shifts.get(index).unwrap().clone()
     }
