@@ -35,16 +35,17 @@ pub struct Generator {
 
 impl Generator {
     /// derive a initial generator state based on a GenerationConfig
-    pub fn new(
-        map: Map,
-        walker: Walker,
-        params: GeneratorParams,
-    ) -> Generator {
+    pub fn new(map: Map, walker: Walker, params: GeneratorParams) -> Generator {
         Generator {
             walker,
             map,
             params,
         }
+    }
+
+    pub fn reshape(&mut self, width: usize, height: usize) {
+        self.map.reshape(width, height);
+        self.walker.set_bounds(width, height);
     }
 
     pub fn step(&mut self) -> Result<(), &'static str> {
@@ -62,8 +63,7 @@ impl Generator {
             self.walker.mutate_kernel();
 
             // perform one step
-            self.walker
-                .probabilistic_step(&mut self.map)?;
+            self.walker.probabilistic_step(&mut self.map)?;
 
             // handle platforms
             self.walker.check_platform(
@@ -79,7 +79,13 @@ impl Generator {
     pub fn post_processing(&mut self) -> Result<(), &'static str> {
         post::fix_edge_bugs(&mut self.map)?;
 
-        generate_room(&mut self.map, self.walker.initial_pos(), 6, 3, Some(BlockType::Start))?;
+        generate_room(
+            &mut self.map,
+            self.walker.initial_pos(),
+            6,
+            3,
+            Some(BlockType::Start),
+        )?;
 
         generate_room(
             &mut self.map,

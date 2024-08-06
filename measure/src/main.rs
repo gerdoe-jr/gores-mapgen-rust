@@ -39,13 +39,14 @@ fn main() {
         RandomDist::new(wal.circ_probs.clone()),
     );
 
-    let walker = Walker::new(
+    let mut walker = Walker::new(
         Kernel::new(5, 0.0),
         Kernel::new(7, 0.0),
-        way.with_map_bounds(300, 150),
         prng,
         wal.clone(),
     );
+
+    walker.set_waypoints(way).set_bounds(300, 150);
 
     let map = Map::new(300, 150, BlockType::Hookable);
     let mut generator = Generator::new(map, walker, gen);

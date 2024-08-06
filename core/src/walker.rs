@@ -65,13 +65,20 @@ pub struct Waypoints {
 }
 
 impl Waypoints {
+    pub fn new() -> Self {
+        Self {
+            waypoints: Vec::new(),
+        }
+    }
+
     pub fn with_map_bounds(&self, width: usize, height: usize) -> Vec<Position> {
-        self.waypoints.iter().map(|&( x, y )| {
-            Position {
+        self.waypoints
+            .iter()
+            .map(|&(x, y)| Position {
                 x: (x * width as f32) as usize,
-                y: (y * height as f32) as usize
-            }
-        }).collect::<Vec<Position>>()
+                y: (y * height as f32) as usize,
+            })
+            .collect::<Vec<Position>>()
     }
 }
 
@@ -83,6 +90,7 @@ pub struct Walker {
     pub outer_kernel: Kernel,
     pub goal: Option<Position>,
     pub goal_index: usize,
+    pub raw_waypoints: Waypoints,
     pub waypoints: Vec<Position>,
 
     /// indicates whether walker has reached the last waypoint
@@ -104,18 +112,18 @@ impl Walker {
     pub fn new(
         inner_kernel: Kernel,
         outer_kernel: Kernel,
-        waypoints: Vec<Position>,
         prng: Random,
         params: WalkerParams,
     ) -> Walker {
         Walker {
-            pos: waypoints[0],
+            pos: Position::new(0, 0),
             steps: 0,
             inner_kernel,
             outer_kernel,
-            goal: waypoints.first().copied(),
+            goal: None,
             goal_index: 0,
-            waypoints: waypoints,
+            raw_waypoints: Waypoints::new(),
+            waypoints: Vec::new(),
             finished: false,
             steps_since_platform: 0,
             last_shift: None,
@@ -123,6 +131,20 @@ impl Walker {
             prng,
             params,
         }
+    }
+
+    pub fn set_waypoints(&mut self, raw_waypoints: Waypoints) -> &mut Self {
+        self.raw_waypoints = raw_waypoints;
+
+        self
+    }
+
+    pub fn set_bounds(&mut self, width: usize, height: usize) -> &mut Self {
+        self.waypoints = self.raw_waypoints.with_map_bounds(width, height);
+        self.pos = self.waypoints[0];
+        self.goal = Some(self.waypoints[0]);
+        
+        self
     }
 
     pub fn initial_pos(&self) -> Position {

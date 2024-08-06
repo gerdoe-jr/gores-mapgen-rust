@@ -214,13 +214,14 @@ impl Editor {
             RandomDist::new(wal.circ_probs.clone()),
         );
 
-        let walker = Walker::new(
+        let mut walker = Walker::new(
             Kernel::new(5, 0.0),
             Kernel::new(7, 0.0),
-            way.with_map_bounds(500, 500),
             prng,
             wal.clone(),
         );
+
+        walker.set_waypoints(way.clone()).set_bounds(500, 500);
 
         let map = Map::new(500, 500, BlockType::Hookable);
 

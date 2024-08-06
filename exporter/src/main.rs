@@ -43,6 +43,14 @@ struct ExporterArgs {
     #[arg(long, default_value = "./out.map")]
     out: PathBuf,
 
+    /// map width
+    #[arg(long, default_value_t = 500)]
+    width: usize,
+
+    /// map height
+    #[arg(long, default_value_t = 500)]
+    height: usize,
+
     /// seed for generation
     #[arg(long, default_value_t = 0xdeadbeef)]
     seed: u64,
@@ -92,14 +100,16 @@ fn main() {
                 RandomDist::new(wal.circ_probs.clone()),
             );
 
-            let walker = Walker::new(
+            let mut walker = Walker::new(
                 Kernel::new(5, 0.0),
                 Kernel::new(7, 0.0),
-                way.with_map_bounds(500, 500),
                 prng,
                 wal,
             );
-            let map = Map::new(500, 500, BlockType::Hookable);
+
+            walker.set_waypoints(way.clone()).set_bounds(args.width, args.height);
+
+            let map = Map::new(args.width, args.height, BlockType::Hookable);
 
             let mut generator = Generator::new(map, walker, gen);
 

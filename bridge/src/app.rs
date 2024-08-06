@@ -140,13 +140,10 @@ impl ServerBridge {
             RandomDist::new(wal.circ_probs.clone()),
         );
 
-        let walker = Walker::new(
-            Kernel::new(5, 0.0),
-            Kernel::new(7, 0.0),
-            way.with_map_bounds(500, 500),
-            prng,
-            wal.clone(),
-        );
+        let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal.clone());
+
+        walker.set_waypoints(way.clone()).set_bounds(500, 500);
+
         let map = Map::new(500, 500, BlockType::Hookable);
 
         let generator = Generator::new(map, walker, gen.clone());
@@ -342,7 +339,8 @@ impl ServerBridge {
                     // TODO: quotation marks?
                     self.current_generator_params = callback_args[2].to_string();
 
-                    self.generator.params = self.generator_configs[&self.current_generator_params].clone();
+                    self.generator.params =
+                        self.generator_configs[&self.current_generator_params].clone();
                 }
                 "walker" => {
                     if callback_args.len() < 3 {
@@ -358,7 +356,8 @@ impl ServerBridge {
                     // TODO: quotation marks?
                     self.current_walker_params = callback_args[2].to_string();
 
-                    self.generator.walker.params = self.walker_configs[&self.current_walker_params].clone();
+                    self.generator.walker.params =
+                        self.walker_configs[&self.current_walker_params].clone();
 
                     let wal = &self.generator.walker.params;
 
@@ -385,7 +384,8 @@ impl ServerBridge {
                     // TODO: quotation marks?
                     self.current_waypoints = callback_args[2].to_string();
 
-                    self.generator.walker.waypoints = self.waypoints_configs[&self.current_waypoints].with_map_bounds(500, 500);
+                    self.generator.walker.waypoints =
+                        self.waypoints_configs[&self.current_waypoints].with_map_bounds(500, 500);
                 }
                 s => warn!(gen!("Unknown configuration: {}"), s),
             },

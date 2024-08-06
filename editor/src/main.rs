@@ -52,8 +52,7 @@ async fn main() {
             if editor.width != editor.generator.as_ref().unwrap().map.width()
                 || editor.height != editor.generator.as_ref().unwrap().map.height()
             {
-                editor.generator.as_mut().unwrap().map.reshape(editor.width, editor.height);
-                editor.generator.as_mut().unwrap().walker.waypoints = editor.config.waypoints.get().with_map_bounds(editor.width, editor.height)
+                editor.generator.as_mut().unwrap().reshape(editor.width, editor.height);
             }
     
             for _ in 0..steps {
