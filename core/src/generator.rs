@@ -121,6 +121,8 @@ impl Generator {
 
         self.post_processing()?;
 
+        self.walker.reset();
+
         Ok(())
     }
 }

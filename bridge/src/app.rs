@@ -384,8 +384,7 @@ impl ServerBridge {
                     // TODO: quotation marks?
                     self.current_waypoints = callback_args[2].to_string();
 
-                    self.generator.walker.waypoints =
-                        self.waypoints_configs[&self.current_waypoints].with_map_bounds(500, 500);
+                    self.generator.walker.set_waypoints(self.waypoints_configs[&self.current_waypoints].clone()).set_bounds(500, 500);
                 }
                 s => warn!(gen!("Unknown configuration: {}"), s),
             },
@@ -413,6 +412,8 @@ impl ServerBridge {
 
         info!(gen!("Generating {}"), map_name);
 
+        self.generator.map.clear();
+
         match self.generator.finalize(100_000) {
             // map was generated successfully
             Ok(()) => {
@@ -428,7 +429,7 @@ impl ServerBridge {
 
                 exporter.finalize().save_map(&map_path);
 
-                info!(gen!("Generated map was exported: {}"), &map_name);
+                info!(gen!("Finished map exporting"));
 
                 return map_name;
             }

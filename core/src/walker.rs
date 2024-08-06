@@ -133,6 +133,17 @@ impl Walker {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.pos = self.waypoints[0];
+        self.steps = 0;
+        self.goal = Some(self.waypoints[0]);
+        self.goal_index = 0;
+        self.finished = false;
+        self.steps_since_platform = 0;
+        self.last_shift = None;
+        self.pulse_counter = 0;
+    }
+
     pub fn set_waypoints(&mut self, raw_waypoints: Waypoints) -> &mut Self {
         self.raw_waypoints = raw_waypoints;
 
