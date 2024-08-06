@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, fs, path::Path};
 
 use mapgen_core::{
-    generator::{Generator, GeneratorParams}, kernel::Kernel, map::{BlockType, Map}, random::{Random, RandomDist, Seed}, walker::{CuteWalker, WalkerParams, Waypoints}
+    generator::{Generator, GeneratorParams}, kernel::Kernel, map::{BlockType, Map}, random::{Random, RandomDist, Seed}, walker::{Walker, WalkerParams, Waypoints}
 };
 use serde::de::DeserializeOwned;
 
@@ -28,7 +28,7 @@ fn main() {
         RandomDist::new(wal.circ_probs.clone()),
     );
 
-    let walker = CuteWalker::new(
+    let walker = Walker::new(
         Kernel::new(5, 0.0),
         Kernel::new(7, 0.0),
         way.waypoints.clone(),

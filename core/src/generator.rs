@@ -2,7 +2,7 @@ use crate::{
     map::{BlockType, Map, Overwrite},
     position::Position,
     post_processing as post,
-    walker::CuteWalker,
+    walker::Walker,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -28,7 +28,7 @@ pub struct GeneratorParams {
 }
 
 pub struct Generator {
-    pub walker: CuteWalker,
+    pub walker: Walker,
     pub map: Map,
     pub params: GeneratorParams,
 }
@@ -37,7 +37,7 @@ impl Generator {
     /// derive a initial generator state based on a GenerationConfig
     pub fn new(
         map: Map,
-        walker: CuteWalker,
+        walker: Walker,
         params: GeneratorParams,
     ) -> Generator {
         Generator {

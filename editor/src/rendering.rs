@@ -1,7 +1,7 @@
 use macroquad::color::colors;
 use macroquad::color::Color;
 use macroquad::shapes::*;
-use mapgen_core::{map::BlockType, map::KernelType, position::Position, walker::CuteWalker};
+use mapgen_core::{map::BlockType, map::KernelType, position::Position, walker::Walker};
 use ndarray::Array2;
 
 fn blocktype_to_color(value: &BlockType) -> Color {
@@ -75,7 +75,7 @@ pub fn draw_chunked_grid(
     }
 }
 
-pub fn draw_walker(walker: &CuteWalker) {
+pub fn draw_walker(walker: &Walker) {
     draw_rectangle_lines(
         walker.pos.x as f32,
         walker.pos.y as f32,
@@ -92,7 +92,7 @@ pub fn draw_walker(walker: &CuteWalker) {
     )
 }
 
-pub fn draw_walker_kernel(walker: &CuteWalker, kernel_type: KernelType) {
+pub fn draw_walker_kernel(walker: &Walker, kernel_type: KernelType) {
     let kernel = match kernel_type {
         KernelType::Inner => &walker.inner_kernel,
         KernelType::Outer => &walker.outer_kernel,

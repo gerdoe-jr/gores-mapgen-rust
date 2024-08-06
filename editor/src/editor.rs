@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env};
 
 use mapgen_core::{
-    generator::Generator, kernel::Kernel, map::{BlockType, Map}, random::{Random, RandomDist, Seed}, walker::CuteWalker
+    generator::Generator, kernel::Kernel, map::{BlockType, Map}, random::{Random, RandomDist, Seed}, walker::Walker
 };
 use mapgen_exporter::Exporter;
 use twmap::TwMap;
@@ -214,7 +214,7 @@ impl Editor {
             RandomDist::new(wal.circ_probs.clone()),
         );
 
-        let walker = CuteWalker::new(
+        let walker = Walker::new(
             Kernel::new(5, 0.0),
             Kernel::new(7, 0.0),
             way.waypoints.clone(),

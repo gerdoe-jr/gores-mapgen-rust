@@ -1,4 +1,4 @@
-use crate::{kernel::Kernel, position::Position, walker::CuteWalker};
+use crate::{kernel::Kernel, position::Position, walker::Walker};
 use ndarray::{s, Array2};
 
 const CHUNK_SIZE: usize = 5;
@@ -130,7 +130,7 @@ impl Map {
 
     pub fn apply_kernel(
         &mut self,
-        walker: &CuteWalker,
+        walker: &Walker,
         kernel: &Kernel,
         block_type: BlockType,
     ) -> Result<(), &'static str> {

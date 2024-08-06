@@ -66,7 +66,7 @@ pub struct Waypoints {
 
 // this walker is indeed very cute
 #[derive(Debug)]
-pub struct CuteWalker {
+pub struct Walker {
     pub pos: Position,
     pub steps: usize,
     pub inner_kernel: Kernel,
@@ -89,20 +89,20 @@ pub struct CuteWalker {
     pub params: WalkerParams,
 }
 
-impl CuteWalker {
+impl Walker {
     pub fn new(
         inner_kernel: Kernel,
         outer_kernel: Kernel,
         waypoints: Vec<Position>,
         prng: Random,
         params: WalkerParams,
-    ) -> CuteWalker {
-        CuteWalker {
+    ) -> Walker {
+        Walker {
             pos: waypoints[0],
             steps: 0,
             inner_kernel,
             outer_kernel,
-            goal: Some(*waypoints.first().unwrap()),
+            goal: waypoints.first().copied(),
             goal_index: 0,
             waypoints: waypoints,
             finished: false,
@@ -250,10 +250,6 @@ impl CuteWalker {
         self.last_shift = Some(current_shift.clone());
 
         Ok(())
-    }
-
-    pub fn cuddle(&self) {
-        println!("Cute walker was cuddled!");
     }
 
     /// fades kernel size from max_size to min_size for fade_steps
