@@ -67,10 +67,6 @@ struct BridgeArgs {
     /// path to walker configurations directory
     #[arg(default_value = "../data/configs/waypoints")]
     way_configs: PathBuf,
-
-    /// how many times generation is retried
-    #[arg(default_value_t = 10, long, short('r'))]
-    generation_retries: usize,
 }
 
 /// keeps track of the server bridge state
@@ -175,11 +171,6 @@ impl ServerBridge {
 
         if self.econ_unchecked().auth(&password) {
             info!(auth!("Authentication succeed"));
-            info!(gen!("Generating initial map..."));
-
-            let seed = Seed::random();
-            let map_name = self.generate_map(seed, self.args.generation_retries);
-            self.change_map(&map_name);
             self.update_votes();
         } else {
             error!(auth!("Authentication failed, try another password"));
@@ -318,83 +309,86 @@ impl ServerBridge {
         match callback_args[0] {
             "generate" => {
                 let seed = Seed::random();
-                let map_name = self.generate_map(seed, self.args.generation_retries);
-                self.change_map(&map_name);
+                let mut map_name = self.generate_map(seed);
+
+                while map_name.is_none() {
+                    map_name = self.generate_map(seed);
+                }
+
+                self.change_map(&map_name.unwrap());
             }
-            "configurate" => match callback_args[1] {
-                "generator" => {
-                    if callback_args.len() < 3 {
-                        warn!(gen!("Missing arguments on configuration call"));
-                        return;
-                    }
+            "configurate" => {
+                if callback_args.len() < 3 {
+                    warn!(gen!("Missing arguments on configuration call"));
+                    return;
+                }
 
-                    if !self.generator_configs.contains_key(callback_args[2]) {
-                        warn!(
-                            gen!("Unknown generator configuration: {}"),
-                            callback_args[2]
+                match callback_args[1] {
+                    "generator" => {
+                        if !self.generator_configs.contains_key(callback_args[2]) {
+                            warn!(
+                                gen!("Unknown generator configuration: {}"),
+                                callback_args[2]
+                            );
+                            return;
+                        }
+
+                        // TODO: quotation marks?
+                        self.current_generator_params = callback_args[2].to_string();
+
+                        self.generator.params =
+                            self.generator_configs[&self.current_generator_params].clone();
+                    }
+                    "walker" => {
+                        if !self.walker_configs.contains_key(callback_args[2]) {
+                            warn!(gen!("Unknown walker configuration: {}"), callback_args[2]);
+                            return;
+                        }
+
+                        // TODO: quotation marks?
+                        self.current_walker_params = callback_args[2].to_string();
+
+                        self.generator.walker.params =
+                            self.walker_configs[&self.current_walker_params].clone();
+
+                        let wal = &self.generator.walker.params;
+
+                        // TODO: move to another config
+                        self.generator.walker.prng = Random::new(
+                            Seed::random(),
+                            RandomDist::new(wal.shift_weights.clone()),
+                            RandomDist::new(wal.outer_margin_probs.clone()),
+                            RandomDist::new(wal.inner_size_probs.clone()),
+                            RandomDist::new(wal.circ_probs.clone()),
                         );
-                        return;
                     }
+                    "waypoints" => {
+                        if !self.waypoints_configs.contains_key(callback_args[2]) {
+                            warn!(
+                                gen!("Unknown waypoints configuration: {}"),
+                                callback_args[2]
+                            );
+                            return;
+                        }
 
-                    // TODO: quotation marks?
-                    self.current_generator_params = callback_args[2].to_string();
+                        // TODO: quotation marks?
+                        self.current_waypoints = callback_args[2].to_string();
 
-                    self.generator.params =
-                        self.generator_configs[&self.current_generator_params].clone();
+                        self.generator
+                            .walker
+                            .set_waypoints(self.waypoints_configs[&self.current_waypoints].clone())
+                            .set_bounds(500, 500);
+                    }
+                    s => warn!(gen!("Unknown configuration: {}"), s),
                 }
-                "walker" => {
-                    if callback_args.len() < 3 {
-                        warn!(gen!("Missing arguments on configuration call"));
-                        return;
-                    }
-
-                    if !self.walker_configs.contains_key(callback_args[2]) {
-                        warn!(gen!("Unknown map configuration: {}"), callback_args[2]);
-                        return;
-                    }
-
-                    // TODO: quotation marks?
-                    self.current_walker_params = callback_args[2].to_string();
-
-                    self.generator.walker.params =
-                        self.walker_configs[&self.current_walker_params].clone();
-
-                    let wal = &self.generator.walker.params;
-
-                    // TODO: move to another config
-                    self.generator.walker.prng = Random::new(
-                        Seed::random(),
-                        RandomDist::new(wal.shift_weights.clone()),
-                        RandomDist::new(wal.outer_margin_probs.clone()),
-                        RandomDist::new(wal.inner_size_probs.clone()),
-                        RandomDist::new(wal.circ_probs.clone()),
-                    );
-                }
-                "waypoints" => {
-                    if callback_args.len() < 3 {
-                        warn!(gen!("Missing arguments on configuration call"));
-                        return;
-                    }
-
-                    if !self.waypoints_configs.contains_key(callback_args[2]) {
-                        warn!(gen!("Unknown map configuration: {}"), callback_args[2]);
-                        return;
-                    }
-
-                    // TODO: quotation marks?
-                    self.current_waypoints = callback_args[2].to_string();
-
-                    self.generator.walker.set_waypoints(self.waypoints_configs[&self.current_waypoints].clone()).set_bounds(500, 500);
-                }
-                s => warn!(gen!("Unknown configuration: {}"), s),
-            },
+            }
             _ => {}
         }
 
         self.update_votes()
     }
 
-    fn generate_map(&mut self, seed: Seed, retries: usize) -> String {
+    fn generate_map(&mut self, seed: Seed) -> Option<String> {
         let map_name = format!(
             "{}_{}_{}_{}",
             &self.current_generator_params,
@@ -415,7 +409,6 @@ impl ServerBridge {
         self.generator.map.clear();
 
         match self.generator.finalize(100_000) {
-            // map was generated successfully
             Ok(()) => {
                 info!(gen!("Finished map generation"));
 
@@ -431,23 +424,14 @@ impl ServerBridge {
 
                 info!(gen!("Finished map exporting"));
 
-                return map_name;
+                return Some(map_name);
             }
-            // map generation failed -> just retry
             Err(generation_error) => {
                 warn!(gen!("Generation Error: {:?}"), generation_error);
             }
         }
 
-        // retry with different seed
-        if retries > 0 {
-            return self.generate_map(Seed::random(), retries - 1);
-        }
-
-        error!(gen!(
-            "Failed to generate map after numerous retries. Give up"
-        ));
-        panic!()
+        None
     }
 
     fn change_map(&mut self, map_name: &str) {
