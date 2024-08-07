@@ -60,33 +60,18 @@ impl<T: Clone> RandomDist<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Seed(pub u64);
+pub type Seed = u64;
 
-impl Seed {
-    pub fn from_u64(seed: u64) -> Seed {
-        Seed(seed)
-    }
-    pub fn from_str(seed: &str) -> Seed {
-        Seed(hash(seed.as_bytes()))
-    }
+pub fn seed_from_str(seed: &str) -> Seed {
+    hash(seed.as_bytes())
+}
 
-    pub fn random() -> Seed {
-        Seed::from_u64(Random::get_random_u64())
-    }
-
-    pub fn fill_with_u64(&mut self, seed: u64) {
-        self.0 = seed;
-    }
-
-    pub fn fill_with_string(&mut self, seed: &str) {
-        self.0 = hash(seed.as_bytes());
-    }
+pub fn random_seed() -> Seed {
+    SmallRng::from_entropy().next_u64()
 }
 
 #[derive(Debug, Clone)]
 pub struct Random {
-    pub seed: Seed,
     gen: SmallRng,
     shift: RandomDist<ShiftDirection>,
     kernel_size: RandomDist<usize>,
@@ -103,8 +88,7 @@ impl Random {
         circularity: RandomDist<f32>,
     ) -> Self {
         Random {
-            gen: SmallRng::seed_from_u64(seed.0),
-            seed,
+            gen: SmallRng::seed_from_u64(seed),
             shift,
             kernel_margin,
             kernel_size,
@@ -152,12 +136,6 @@ impl Random {
         let dist = &self.shift;
         let index = dist.rnd_dist.sample(&mut self.gen);
         ordered_shifts.get(index).unwrap().clone()
-    }
-
-    /// derive a u64 seed from entropy
-    pub fn get_random_u64() -> u64 {
-        let mut tmp_rng = SmallRng::from_entropy();
-        tmp_rng.next_u64()
     }
 
     pub fn in_range_inclusive(&mut self, low: usize, high: usize) -> usize {

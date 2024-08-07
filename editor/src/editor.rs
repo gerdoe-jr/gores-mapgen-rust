@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env};
 
 use mapgen_core::{
-    generator::Generator, kernel::Kernel, map::{BlockType, Map}, random::{Random, RandomDist, Seed}, walker::Walker
+    generator::Generator, kernel::Kernel, map::{BlockType, Map}, random::{random_seed, Random, RandomDist, Seed}, walker::Walker
 };
 use mapgen_exporter::Exporter;
 use twmap::TwMap;
@@ -109,7 +109,7 @@ impl Editor {
             last_mouse: None,
             steps_per_frame: STEPS_PER_FRAME,
             generator: None,
-            user_seed: Seed::random(),
+            user_seed: random_seed(),
             instant: false,
             auto_generate: false,
             edit_gen_config: false,
@@ -207,7 +207,7 @@ impl Editor {
         let way = self.config.waypoints.get();
 
         let prng = Random::new(
-            Seed::random(),
+            random_seed(),
             RandomDist::new(wal.shift_weights.clone()),
             RandomDist::new(wal.outer_margin_probs.clone()),
             RandomDist::new(wal.inner_size_probs.clone()),

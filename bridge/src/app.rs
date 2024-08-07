@@ -9,7 +9,7 @@ use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
     map::{BlockType, Map},
-    random::{Random, RandomDist, Seed},
+    random::{random_seed, Random, RandomDist, Seed},
     walker::{Walker, WalkerParams, Waypoints},
 };
 use mapgen_exporter::{Exporter, ExporterConfig};
@@ -129,7 +129,7 @@ impl ServerBridge {
         let way = &waypoints_configs[&current_waypoints];
 
         let prng = Random::new(
-            Seed::random(),
+            random_seed(),
             RandomDist::new(wal.shift_weights.clone()),
             RandomDist::new(wal.outer_margin_probs.clone()),
             RandomDist::new(wal.inner_size_probs.clone()),
@@ -308,7 +308,7 @@ impl ServerBridge {
 
         match callback_args[0] {
             "generate" => {
-                let seed = Seed::random();
+                let seed = random_seed();
                 let mut map_name = self.generate_map(seed);
 
                 while map_name.is_none() {
@@ -355,7 +355,7 @@ impl ServerBridge {
 
                         // TODO: move to another config
                         self.generator.walker.prng = Random::new(
-                            Seed::random(),
+                            random_seed(),
                             RandomDist::new(wal.shift_weights.clone()),
                             RandomDist::new(wal.outer_margin_probs.clone()),
                             RandomDist::new(wal.inner_size_probs.clone()),
@@ -394,7 +394,7 @@ impl ServerBridge {
             &self.current_generator_params,
             &self.current_walker_params,
             &self.current_waypoints,
-            seed.0
+            seed
         );
 
         let map_path = self
@@ -412,7 +412,7 @@ impl ServerBridge {
             Ok(()) => {
                 info!(gen!("Finished map generation"));
 
-                let idx = Seed::random().0 as usize % self.base_maps.len();
+                let idx = random_seed() as usize % self.base_maps.len();
 
                 let mut exporter = Exporter::new(
                     self.base_maps.get_mut(idx).unwrap(),

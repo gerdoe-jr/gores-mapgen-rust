@@ -9,7 +9,7 @@ use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
     map::{BlockType, Map},
-    random::{Random, RandomDist, Seed},
+    random::{random_seed, Random, RandomDist},
     walker::{Walker, WalkerParams, Waypoints},
 };
 use serde::de::DeserializeOwned;
@@ -32,7 +32,7 @@ fn main() {
         .clone();
 
     let prng = Random::new(
-        Seed::random(),
+        random_seed(),
         RandomDist::new(wal.shift_weights.clone()),
         RandomDist::new(wal.outer_margin_probs.clone()),
         RandomDist::new(wal.inner_size_probs.clone()),

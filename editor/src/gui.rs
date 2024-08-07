@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env, isize};
 
 use egui::{ComboBox, RichText, ScrollArea};
-use mapgen_core::random::Seed;
+use mapgen_core::random::random_seed;
 use mapgen_core::walker::Pulse;
 use tinyfiledialogs;
 
@@ -296,12 +296,12 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
             ui.horizontal(|ui| {
                 ui.label("u64");
 
-                edit_u64_textfield(ui, &mut editor.user_seed.0);
+                edit_u64_textfield(ui, &mut editor.user_seed);
             });
 
             ui.horizontal(|ui| {
                 if ui.button("random seed").clicked() {
-                    editor.user_seed = Seed::random();
+                    editor.user_seed = random_seed();
                 }
                 if ui.button("save map").clicked() {
                     editor.save_map_dialog();

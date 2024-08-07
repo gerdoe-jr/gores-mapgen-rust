@@ -6,7 +6,7 @@ use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
     map::{BlockType, Map},
-    random::{Random, RandomDist, Seed},
+    random::{Random, RandomDist},
     walker::{Walker, WalkerParams, Waypoints},
 };
 use twmap::TwMap;
@@ -93,7 +93,7 @@ fn main() {
             tw_map.load().expect("failed to load base map");
 
             let prng = Random::new(
-                Seed::from_u64(args.seed),
+                args.seed,
                 RandomDist::new(wal.shift_weights.clone()),
                 RandomDist::new(wal.outer_margin_probs.clone()),
                 RandomDist::new(wal.inner_size_probs.clone()),
