@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{self, HashMap},
     error::Error,
     fs::{self, File},
     path::Path,
@@ -7,16 +7,16 @@ use std::{
 
 use mapgen_core::{
     generator::GeneratorParams,
-    walker::{WalkerParams, Waypoints},
+    walker::{NormalWaypoints, WalkerParams},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-pub struct Configuration<T: DeserializeOwned> {
+pub struct Configuration<T: DeserializeOwned + Default> {
     pub current: String,
     pub all: HashMap<String, T>,
 }
 
-impl<T: DeserializeOwned> Configuration<T> {
+impl<T: DeserializeOwned + Default> Configuration<T> {
     pub fn new() -> Self {
         Self {
             current: String::new(),
@@ -24,19 +24,40 @@ impl<T: DeserializeOwned> Configuration<T> {
         }
     }
 
-    pub fn get(&self) -> &T {
-        self.all.get(&self.current).unwrap()
+    pub fn current_name(&self) -> &str {
+        &self.current
     }
 
-    pub fn get_mut(&mut self) -> &mut T {
-        self.all.get_mut(&self.current).unwrap()
+    pub fn iter(&self) -> collections::hash_map::Iter<String, T> {
+        self.all.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> collections::hash_map::IterMut<String, T> {
+        self.all.iter_mut()
+    }
+
+    pub fn insert_default_if_none(&mut self) {
+        if self.all.len() != 0 {
+            return;
+        }
+        
+        self.current = "default".to_string();
+        self.all.insert(self.current.clone(), Default::default());
+    }
+
+    pub fn get(&mut self) -> Option<&T> {
+        self.all.get(&self.current)
+    }
+
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        self.all.get_mut(&self.current)
     }
 }
 
 pub struct Configurations {
     pub generator: Configuration<GeneratorParams>,
     pub walker: Configuration<WalkerParams>,
-    pub waypoints: Configuration<Waypoints>,
+    pub waypoints: Configuration<NormalWaypoints>,
 }
 
 impl Configurations {
@@ -65,11 +86,17 @@ impl Configurations {
 
         Ok(())
     }
+
+    pub fn fill_defaults(&mut self) {
+        self.generator.insert_default_if_none();
+        self.walker.insert_default_if_none();
+        self.waypoints.insert_default_if_none();
+    }
 }
 
 fn load_configs_from_dir<C, P>(path: P) -> Result<Configuration<C>, Box<dyn Error>>
 where
-    C: DeserializeOwned,
+    C: DeserializeOwned + Default,
     P: AsRef<Path>,
 {
     let mut last = String::new();

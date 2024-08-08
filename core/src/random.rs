@@ -1,62 +1,86 @@
-use crate::position::ShiftDirection;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use rand_distr::uniform::{SampleRange, SampleUniform};
 use rand_distr::WeightedAliasIndex;
 use seahash::hash;
 
-#[derive(Clone, PartialEq, Debug)]
+// only trivially copyable
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RandomDistConfig<T> {
-    pub values: Option<Vec<T>>,
-    pub probs: Vec<f32>,
+pub struct ProbableValue<T: Copy>(pub f32, pub T);
+
+impl<T: Copy> ProbableValue<T> {
+    pub fn new(probability: f32, value: T) -> Self {
+        Self(probability, value)
+    }
 }
 
-impl<T> RandomDistConfig<T> {
-    pub fn new(values: Option<Vec<T>>, probs: Vec<f32>) -> RandomDistConfig<T> {
-        RandomDistConfig { values, probs }
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct RandomDistConfig<T: Copy> {
+    pub values: Vec<ProbableValue<T>>,
+}
+
+impl<T: Copy> RandomDistConfig<T> {
+    pub fn new() -> Self {
+        Self { values: Vec::new() }
+    }
+    pub fn from_values(values: Vec<ProbableValue<T>>) -> Self {
+        Self { values }
+    }
+
+    pub fn get(&self, index: usize) -> ProbableValue<T> {
+        self.values[index]
     }
 
     pub fn normalize_probs(&mut self) {
-        let probs_sum: f32 = self.probs.iter().sum();
+        let probs_sum: f32 = self.values.iter().map(|&ProbableValue(p, _)| p).sum();
 
+        // TODO: does it really work? fp maths and comparison is a bit *float*
         if probs_sum == 1.0 {
             return; // skip if already normalized
         }
 
+        let mapped_values = self.values.iter_mut().map(|ProbableValue(p, _)| p);
+
         // if all values are zero, set all to 1/n
         if probs_sum == 0.0 {
-            let len = self.probs.len();
-            for val in self.probs.iter_mut() {
-                *val = 1.0 / len as f32;
-            }
+            let len = mapped_values.len();
+
+            mapped_values.for_each(|p| *p = 1.0 / len as f32);
         // otherwise normalize, if required
-        } else if probs_sum != 1.0 {
-            for val in self.probs.iter_mut() {
-                *val /= probs_sum; // Normalize the vector
-            }
+        } else {
+            mapped_values.for_each(|p| *p /= probs_sum);
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct RandomDist<T> {
-    rnd_cfg: RandomDistConfig<T>,
-    rnd_dist: WeightedAliasIndex<f32>,
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct RandomDist<T: Copy> {
+    pub config: RandomDistConfig<T>,
 }
 
-pub enum RandomDistType {
-    InnerSize,
-    OuterMargin,
-    Circularity,
-    ShiftDirection,
-}
-
-impl<T: Clone> RandomDist<T> {
-    pub fn new(config: RandomDistConfig<T>) -> RandomDist<T> {
-        RandomDist {
-            rnd_dist: WeightedAliasIndex::new(config.probs.clone()).unwrap(),
-            rnd_cfg: config,
+impl<T: Copy> RandomDist<T> {
+    pub fn new() -> Self {
+        Self {
+            config: RandomDistConfig::new(),
         }
+    }
+
+    pub fn from_config(config: RandomDistConfig<T>) -> Self {
+        Self { config }
+    }
+
+    pub fn weights(&self) -> WeightedAliasIndex<f32> {
+        WeightedAliasIndex::new(
+            self.config
+                .values
+                .iter()
+                .map(|&ProbableValue(p, _)| p)
+                .collect(),
+        )
+        .unwrap()
     }
 }
 
@@ -72,121 +96,58 @@ pub fn random_seed() -> Seed {
 
 #[derive(Debug, Clone)]
 pub struct Random {
-    gen: SmallRng,
-    shift: RandomDist<ShiftDirection>,
-    kernel_size: RandomDist<usize>,
-    kernel_margin: RandomDist<usize>,
-    circularity: RandomDist<f32>,
+    prng: SmallRng,
 }
 
 impl Random {
-    pub fn new(
-        seed: Seed,
-        shift: RandomDist<ShiftDirection>,
-        kernel_margin: RandomDist<usize>,
-        kernel_size: RandomDist<usize>,
-        circularity: RandomDist<f32>,
-    ) -> Self {
+    pub fn new(seed: Seed) -> Self {
         Random {
-            gen: SmallRng::seed_from_u64(seed),
-            shift,
-            kernel_margin,
-            kernel_size,
-            circularity,
+            prng: SmallRng::seed_from_u64(seed),
         }
     }
 
-    pub fn sample_inner_kernel_size(&mut self) -> usize {
-        let dist = &self.kernel_size;
-        let index = dist.rnd_dist.sample(&mut self.gen);
-        dist.rnd_cfg
-            .values
-            .as_ref()
-            .unwrap()
-            .get(index)
-            .unwrap()
-            .clone()
+    pub fn sample_value<T: Copy>(&mut self, dist: &RandomDist<T>) -> T {
+        dist.config.get(self.sample_index(dist)).1
     }
 
-    pub fn sample_outer_kernel_margin(&mut self) -> usize {
-        let dist = &self.kernel_margin;
-        let index = dist.rnd_dist.sample(&mut self.gen);
-        dist.rnd_cfg
-            .values
-            .as_ref()
-            .unwrap()
-            .get(index)
-            .unwrap()
-            .clone()
+    pub fn sample_index<T: Copy>(&mut self, dist: &RandomDist<T>) -> usize {
+        // TODO: cache weights somehow, config can be changed middleway though
+        dist.weights().sample(&mut self.prng)
     }
 
-    pub fn sample_circularity(&mut self) -> f32 {
-        let dist = &self.circularity;
-        let index = dist.rnd_dist.sample(&mut self.gen);
-        dist.rnd_cfg
-            .values
-            .as_ref()
-            .unwrap()
-            .get(index)
-            .unwrap()
-            .clone()
+    pub fn in_range<T, R>(&mut self, range: R) -> T
+    where
+        T: SampleUniform,
+        R: SampleRange<T>,
+    {
+        self.prng.gen_range(range)
     }
 
-    pub fn sample_shift(&mut self, ordered_shifts: &[ShiftDirection; 4]) -> ShiftDirection {
-        let dist = &self.shift;
-        let index = dist.rnd_dist.sample(&mut self.gen);
-        ordered_shifts.get(index).unwrap().clone()
+    pub fn gen_u64(&mut self) -> u64 {
+        self.prng.next_u64()
     }
 
-    pub fn in_range_inclusive(&mut self, low: usize, high: usize) -> usize {
-        assert!(high >= low, "no valid range");
-        let n = (high - low) + 1;
-        let rnd_value = self.gen.next_u64() as usize;
-
-        low + (rnd_value % n)
+    pub fn gen_bool(&mut self, probability: f32) -> bool {
+        self.prng.gen_bool(probability.clamp(0.0, 1.0).into())
     }
 
-    pub fn in_range_exclusive(&mut self, low: usize, high: usize) -> usize {
-        assert!(high > low, "no valid range");
-        let n = high - low;
-        let rnd_value = self.gen.next_u64() as usize;
-
-        low + (rnd_value % n)
+    pub fn gen_normal(&mut self) -> f32 {
+        self.prng.next_u32() as f32 / f32::MAX
     }
 
-    pub fn random_u64(&mut self) -> u64 {
-        self.gen.next_u64()
-    }
-
-    pub fn with_probability(&mut self, probability: f32) -> bool {
-        if probability == 1.0 {
-            self.skip();
-            true
-        } else if probability == 0.0 {
-            self.skip();
-            false
-        } else {
-            (self.gen.next_u64() as f32) < (u64::max_value() as f32 * probability)
-        }
+    pub fn pick<'a, T>(&'a mut self, values: &'a [T]) -> &T {
+        &values[self.in_range(0..values.len())]
     }
 
     /// skip one gen step to ensure that a value is consumed in any case
     pub fn skip(&mut self) {
-        self.gen.next_u64();
+        self.prng.next_u64();
     }
 
     /// skip n gen steps to ensure that n values are consumed in any case
     pub fn skip_n(&mut self, n: usize) {
         for _ in 0..n {
-            self.gen.next_u64();
+            self.skip();
         }
-    }
-
-    pub fn pick_element<'a, T>(&'a mut self, values: &'a [T]) -> &T {
-        &values[self.in_range_exclusive(0, values.len())]
-    }
-
-    pub fn random_circularity(&mut self) -> f32 {
-        self.gen.next_u64() as f32 / u64::max_value() as f32
     }
 }

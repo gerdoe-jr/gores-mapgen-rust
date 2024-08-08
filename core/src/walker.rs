@@ -3,10 +3,10 @@ use crate::{
     kernel::Kernel,
     map::{BlockType, Map, Overwrite},
     position::{Position, ShiftDirection},
-    random::{Random, RandomDistConfig},
+    random::{Random, RandomDist},
 };
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WalkerParams {
     /// probability for mutating inner radius
@@ -22,19 +22,19 @@ pub struct WalkerParams {
     pub outer_size_mut_prob: f32,
 
     /// probability weighting for random selection from best to worst towards next goal
-    pub shift_weights: RandomDistConfig<ShiftDirection>,
+    pub shift_weights: RandomDist<ShiftDirection>,
 
     /// probability for doing the last shift direction again
     pub momentum_prob: f32,
 
     /// probabilities for (inner_kernel_size, probability)
-    pub inner_size_probs: RandomDistConfig<usize>,
+    pub inner_size_probs: RandomDist<usize>,
 
     /// probabilities for (outer_kernel_margin, probability)
-    pub outer_margin_probs: RandomDistConfig<usize>,
+    pub outer_margin_probs: RandomDist<usize>,
 
     /// probabilities for (kernel circularity, probability)
-    pub circ_probs: RandomDistConfig<f32>,
+    pub circ_probs: RandomDist<f32>,
 
     /// enable pulse
     pub pulse: Option<Pulse>,
@@ -58,13 +58,13 @@ pub struct Pulse {
     pub max_kernel_size: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Waypoints {
+pub struct NormalWaypoints {
     pub waypoints: Vec<(f32, f32)>,
 }
 
-impl Waypoints {
+impl NormalWaypoints {
     pub fn new() -> Self {
         Self {
             waypoints: Vec::new(),
@@ -90,7 +90,7 @@ pub struct Walker {
     pub outer_kernel: Kernel,
     pub goal: Option<Position>,
     pub goal_index: usize,
-    pub raw_waypoints: Waypoints,
+    pub raw_waypoints: NormalWaypoints,
     pub waypoints: Vec<Position>,
 
     /// indicates whether walker has reached the last waypoint
@@ -122,7 +122,7 @@ impl Walker {
             outer_kernel,
             goal: None,
             goal_index: 0,
-            raw_waypoints: Waypoints::new(),
+            raw_waypoints: NormalWaypoints::new(),
             waypoints: Vec::new(),
             finished: false,
             steps_since_platform: 0,
@@ -144,7 +144,7 @@ impl Walker {
         self.pulse_counter = 0;
     }
 
-    pub fn set_waypoints(&mut self, raw_waypoints: Waypoints) -> &mut Self {
+    pub fn set_waypoints(&mut self, raw_waypoints: NormalWaypoints) -> &mut Self {
         self.raw_waypoints = raw_waypoints;
 
         self
@@ -230,12 +230,12 @@ impl Walker {
         let goal = self.goal.as_ref().ok_or("Error: Goal is None")?;
         let shifts = self.pos.get_rated_shifts(goal, map);
 
-        let mut current_shift = self.prng.sample_shift(&shifts);
+        let mut current_shift = shifts[self.prng.sample_index(&self.params.shift_weights)];
 
         let same_dir = match self.last_shift {
             Some(last_shift) => {
                 // Momentum: re-use last shift direction
-                if self.prng.with_probability(self.params.momentum_prob) {
+                if self.prng.gen_bool(self.params.momentum_prob) {
                     current_shift = last_shift;
                 }
 
@@ -312,57 +312,43 @@ impl Walker {
             return;
         }
 
-        let mut inner_size = self.inner_kernel.size;
-        let mut inner_circ = self.inner_kernel.circularity;
-        let mut outer_size = self.outer_kernel.size;
-        let mut outer_circ = self.outer_kernel.circularity;
-        let mut outer_margin = outer_size - inner_size;
-        let mut modified = false;
+        if self.prng.gen_bool(self.params.inner_size_mut_prob) {
+            let size = self.prng.sample_value(&self.params.inner_size_probs);
 
-        if self.prng.with_probability(self.params.inner_size_mut_prob) {
-            inner_size = self.prng.sample_inner_kernel_size();
-            modified = true;
+            self.inner_kernel.size = size;
+
+            if self.prng.gen_bool(self.params.outer_size_mut_prob) {
+                self.outer_kernel.size = size + self.prng.sample_value(&self.params.outer_margin_probs);
+            } else {
+                self.outer_kernel.size = size;
+                self.prng.skip_n(2);
+            }
         } else {
             self.prng.skip_n(2); // for some reason sampling requires two values?
         }
 
-        if self.prng.with_probability(self.params.outer_size_mut_prob) {
-            outer_margin = self.prng.sample_outer_kernel_margin();
-            modified = true;
+        if self.outer_kernel.size < self.inner_kernel.size {
+            self.outer_kernel.size = self.inner_kernel.size;
+        }
+
+        if self.inner_kernel.size > 3 {
+            if self.prng.gen_bool(self.params.inner_rad_mut_prob) {
+                self.inner_kernel.circularity = self.prng.gen_normal();
+            } else {
+                self.prng.skip_n(2);
+            }
         } else {
-            self.prng.skip_n(2);
+            self.inner_kernel.circularity = 0.0;
         }
 
-        if self.prng.with_probability(self.params.inner_rad_mut_prob) {
-            inner_circ = self.prng.sample_circularity();
-            modified = true;
+        if self.outer_kernel.size > 3 {
+            if self.prng.gen_bool(self.params.outer_rad_mut_prob) {
+                self.outer_kernel.circularity = self.prng.gen_normal();
+            } else {
+                self.prng.skip_n(2);
+            }
         } else {
-            self.prng.skip_n(2);
-        }
-
-        if self.prng.with_probability(self.params.outer_rad_mut_prob) {
-            outer_circ = self.prng.sample_circularity();
-            modified = true;
-        } else {
-            self.prng.skip_n(2);
-        }
-
-        outer_size = inner_size + outer_margin;
-
-        // constraint 1: small circles must be fully rect
-        if inner_size <= 3 {
-            inner_circ = 0.0;
-        }
-        if outer_size <= 3 {
-            outer_circ = 0.0;
-        }
-
-        // constraint 2: outer size cannot be smaller than inner
-        assert!(outer_size >= inner_size); // this shoulnt happen -> crash!
-
-        if modified {
-            self.inner_kernel = Kernel::new(inner_size, inner_circ);
-            self.outer_kernel = Kernel::new(outer_size, outer_circ);
+            self.outer_kernel.circularity = 0.0;
         }
     }
 }

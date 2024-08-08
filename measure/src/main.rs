@@ -9,8 +9,8 @@ use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
     map::{BlockType, Map},
-    random::{random_seed, Random, RandomDist},
-    walker::{Walker, WalkerParams, Waypoints},
+    random::{random_seed, Random},
+    walker::{NormalWaypoints, Walker, WalkerParams},
 };
 use serde::de::DeserializeOwned;
 
@@ -27,24 +27,13 @@ fn main() {
         ["insaneV2"]
         .clone();
 
-    let way = load_configs_from_dir::<Waypoints, _>("../data/configs/waypoints").unwrap()
+    let way = load_configs_from_dir::<NormalWaypoints, _>("../data/configs/waypoints").unwrap()
         ["hor_line"]
         .clone();
 
-    let prng = Random::new(
-        random_seed(),
-        RandomDist::new(wal.shift_weights.clone()),
-        RandomDist::new(wal.outer_margin_probs.clone()),
-        RandomDist::new(wal.inner_size_probs.clone()),
-        RandomDist::new(wal.circ_probs.clone()),
-    );
+    let prng = Random::new(random_seed());
 
-    let mut walker = Walker::new(
-        Kernel::new(5, 0.0),
-        Kernel::new(7, 0.0),
-        prng,
-        wal.clone(),
-    );
+    let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal.clone());
 
     walker.set_waypoints(way).set_bounds(300, 150);
 

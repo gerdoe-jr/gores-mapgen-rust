@@ -6,8 +6,8 @@ use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
     map::{BlockType, Map},
-    random::{Random, RandomDist},
-    walker::{Walker, WalkerParams, Waypoints},
+    random::Random,
+    walker::{NormalWaypoints, Walker, WalkerParams},
 };
 use twmap::TwMap;
 
@@ -86,28 +86,19 @@ fn main() {
 
             let gen: GeneratorParams = serde_json::from_str(&gen_config_data).unwrap();
             let wal: WalkerParams = serde_json::from_str(&wal_config_data).unwrap();
-            let way: Waypoints = serde_json::from_str(&way_config_data).unwrap();
+            let way: NormalWaypoints = serde_json::from_str(&way_config_data).unwrap();
             let exp: ExporterConfig = serde_json::from_str(&exp_config_data).unwrap();
 
             let mut tw_map = TwMap::parse_file(args.base_map).expect("failed to parse base map");
             tw_map.load().expect("failed to load base map");
 
-            let prng = Random::new(
-                args.seed,
-                RandomDist::new(wal.shift_weights.clone()),
-                RandomDist::new(wal.outer_margin_probs.clone()),
-                RandomDist::new(wal.inner_size_probs.clone()),
-                RandomDist::new(wal.circ_probs.clone()),
-            );
+            let prng = Random::new(args.seed);
 
-            let mut walker = Walker::new(
-                Kernel::new(5, 0.0),
-                Kernel::new(7, 0.0),
-                prng,
-                wal,
-            );
+            let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal);
 
-            walker.set_waypoints(way.clone()).set_bounds(args.width, args.height);
+            walker
+                .set_waypoints(way.clone())
+                .set_bounds(args.width, args.height);
 
             let map = Map::new(args.width, args.height, BlockType::Hookable);
 

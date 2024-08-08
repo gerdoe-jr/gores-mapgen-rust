@@ -5,7 +5,7 @@ use crate::{
     walker::Walker,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GeneratorParams {
     /// (min, max) distance between platforms

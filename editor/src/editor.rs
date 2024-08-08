@@ -1,7 +1,11 @@
 use std::{collections::HashMap, env};
 
 use mapgen_core::{
-    generator::Generator, kernel::Kernel, map::{BlockType, Map}, random::{random_seed, Random, RandomDist, Seed}, walker::Walker
+    generator::Generator,
+    kernel::Kernel,
+    map::{BlockType, Map},
+    random::{random_seed, Random, Seed},
+    walker::Walker,
 };
 use mapgen_exporter::Exporter;
 use twmap::TwMap;
@@ -20,7 +24,10 @@ use macroquad::{
 
 use rand_distr::num_traits::Zero;
 
-use crate::{config::Configurations, gui::{debug_window, sidebar}};
+use crate::{
+    config::Configurations,
+    gui::{debug_window, sidebar},
+};
 
 const STEPS_PER_FRAME: usize = 50;
 const ZOOM_FACTOR: f32 = 0.9;
@@ -92,7 +99,7 @@ pub struct Editor {
     pub visualize_debug_layers: HashMap<&'static str, bool>,
 
     pub width: usize,
-    pub height: usize
+    pub height: usize,
 }
 
 impl Editor {
@@ -117,7 +124,7 @@ impl Editor {
             edit_way_config: false,
             visualize_debug_layers: HashMap::new(),
             width: 500,
-            height: 500
+            height: 500,
         }
     }
 
@@ -176,16 +183,10 @@ impl Editor {
     }
 
     pub fn set_playing(&mut self) {
-        if self.is_setup() {
-            self.on_start();
-        }
         self.state = EditorState::Playing(PlayingState::Continuous);
     }
 
     pub fn set_single_step(&mut self) {
-        if self.is_setup() {
-            self.on_start();
-        }
         self.state = EditorState::Playing(PlayingState::SingleStep);
     }
 
@@ -197,36 +198,33 @@ impl Editor {
         self.state = EditorState::Paused(PausedState::Stopped);
     }
 
-    fn on_start(&mut self) {
-        self.config.load_generator("../data/configs/generator").expect("failed to load generator configurations");
-        self.config.load_walker("../data/configs/walker").expect("failed to load walker configurations");
-        self.config.load_waypoints("../data/configs/waypoints").expect("failed to load waypoints configurations");
+    pub fn on_start(&mut self) {
+        self.config
+            .load_generator("../data/configs/generator")
+            .expect("failed to load generator configurations");
+        self.config
+            .load_walker("../data/configs/walker")
+            .expect("failed to load walker configurations");
+        self.config
+            .load_waypoints("../data/configs/waypoints")
+            .expect("failed to load waypoints configurations");
 
-        let gen = self.config.generator.get();
-        let wal = self.config.walker.get();
-        let way = self.config.waypoints.get();
+        self.config.fill_defaults();
 
-        let prng = Random::new(
-            random_seed(),
-            RandomDist::new(wal.shift_weights.clone()),
-            RandomDist::new(wal.outer_margin_probs.clone()),
-            RandomDist::new(wal.inner_size_probs.clone()),
-            RandomDist::new(wal.circ_probs.clone()),
-        );
+        let gen = self.config.generator.get().unwrap();
+        let wal = self.config.walker.get().unwrap();
+        let way = self.config.waypoints.get().unwrap();
 
-        let mut walker = Walker::new(
-            Kernel::new(5, 0.0),
-            Kernel::new(7, 0.0),
-            prng,
-            wal.clone(),
-        );
+        let prng = Random::new(random_seed());
 
-        walker.set_waypoints(way.clone()).set_bounds(500, 500);
+        let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal.clone());
+
+        walker.set_waypoints(way.clone());
 
         let map = Map::new(500, 500, BlockType::Hookable);
 
         let generator = Generator::new(map, walker, gen.clone());
-        
+
         self.generator = Some(generator);
     }
 

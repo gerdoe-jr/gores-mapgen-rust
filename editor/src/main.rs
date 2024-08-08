@@ -33,6 +33,8 @@ async fn main() {
     let mut editor = Editor::new();
     let mut fps_ctrl = FPSControl::new().with_max_fps(120);
 
+    editor.on_start();
+
     loop {
         fps_ctrl.on_frame_start();
         editor.on_frame_start();
@@ -52,9 +54,13 @@ async fn main() {
             if editor.width != editor.generator.as_ref().unwrap().map.width()
                 || editor.height != editor.generator.as_ref().unwrap().map.height()
             {
-                editor.generator.as_mut().unwrap().reshape(editor.width, editor.height);
+                editor
+                    .generator
+                    .as_mut()
+                    .unwrap()
+                    .reshape(editor.width, editor.height);
             }
-    
+
             for _ in 0..steps {
                 if editor.is_paused() || editor.generator.as_ref().unwrap().walker.finished {
                     break;
@@ -116,6 +122,7 @@ async fn main() {
                     .config
                     .waypoints
                     .get()
+                    .unwrap()
                     .with_map_bounds(editor.width, editor.height),
             );
         }

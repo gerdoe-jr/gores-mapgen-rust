@@ -9,8 +9,8 @@ use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
     map::{BlockType, Map},
-    random::{random_seed, Random, RandomDist, Seed},
-    walker::{Walker, WalkerParams, Waypoints},
+    random::{random_seed, Random, Seed},
+    walker::{Walker, WalkerParams, NormalWaypoints},
 };
 use mapgen_exporter::{Exporter, ExporterConfig};
 
@@ -84,7 +84,7 @@ pub struct ServerBridge {
     walker_configs: HashMap<String, WalkerParams>,
 
     /// stores all available map configs
-    waypoints_configs: HashMap<String, Waypoints>,
+    waypoints_configs: HashMap<String, NormalWaypoints>,
 
     /// selected generator config
     current_generator_params: String,
@@ -118,7 +118,7 @@ impl ServerBridge {
         let walker_configs =
             load_configs_from_dir::<WalkerParams, _>(args.wal_configs.as_path()).unwrap();
         let waypoints_configs =
-            load_configs_from_dir::<Waypoints, _>(args.way_configs.as_path()).unwrap();
+            load_configs_from_dir::<NormalWaypoints, _>(args.way_configs.as_path()).unwrap();
 
         let current_generator_params = generator_configs.iter().last().unwrap().0.clone();
         let current_walker_params = walker_configs.iter().last().unwrap().0.clone();
@@ -128,13 +128,7 @@ impl ServerBridge {
         let wal = &walker_configs[&current_walker_params];
         let way = &waypoints_configs[&current_waypoints];
 
-        let prng = Random::new(
-            random_seed(),
-            RandomDist::new(wal.shift_weights.clone()),
-            RandomDist::new(wal.outer_margin_probs.clone()),
-            RandomDist::new(wal.inner_size_probs.clone()),
-            RandomDist::new(wal.circ_probs.clone()),
-        );
+        let prng = Random::new(random_seed());
 
         let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal.clone());
 
@@ -350,17 +344,6 @@ impl ServerBridge {
 
                         self.generator.walker.params =
                             self.walker_configs[&self.current_walker_params].clone();
-
-                        let wal = &self.generator.walker.params;
-
-                        // TODO: move to another config
-                        self.generator.walker.prng = Random::new(
-                            random_seed(),
-                            RandomDist::new(wal.shift_weights.clone()),
-                            RandomDist::new(wal.outer_margin_probs.clone()),
-                            RandomDist::new(wal.inner_size_probs.clone()),
-                            RandomDist::new(wal.circ_probs.clone()),
-                        );
                     }
                     "waypoints" => {
                         if !self.waypoints_configs.contains_key(callback_args[2]) {
@@ -478,7 +461,7 @@ fn print_configs(args: BridgeArgs) {
     );
     println!(
         "Waypoints: {}",
-        load_configs_from_dir::<Waypoints, _>(args.way_configs.as_path())
+        load_configs_from_dir::<NormalWaypoints, _>(args.way_configs.as_path())
             .unwrap()
             .keys()
             .into_iter()
