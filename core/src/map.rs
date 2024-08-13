@@ -1,4 +1,4 @@
-use crate::{kernel::Kernel, position::Position, walker::Walker};
+use crate::{kernel::Kernel, position::Vector2};
 use ndarray::{s, Array2};
 
 const CHUNK_SIZE: usize = 5;
@@ -104,24 +104,22 @@ pub struct Map {
     pub grid: Array2<BlockType>,
     pub chunks_edited: Array2<bool>, // TODO: make this optional in case editor is not used!
     pub chunk_size: usize,
-    default_block: BlockType,
 }
 
 impl Map {
-    pub fn new(width: usize, height: usize, default_block: BlockType) -> Map {
+    pub fn new(width: usize, height: usize) -> Map {
         Map {
-            grid: Array2::from_elem((width, height), default_block),
+            grid: Array2::from_elem((width, height), BlockType::Empty),
             chunks_edited: Array2::from_elem(
                 (width.div_ceil(CHUNK_SIZE), height.div_ceil(CHUNK_SIZE)),
                 false,
             ),
-            chunk_size: CHUNK_SIZE,
-            default_block,
+            chunk_size: CHUNK_SIZE
         }
     }
 
     pub fn clear(&mut self) {
-        self.grid.fill(self.default_block)
+        self.grid.fill(BlockType::Empty)
     }
 
     pub fn width(&self) -> usize {
@@ -133,7 +131,7 @@ impl Map {
     }
 
     pub fn reshape(&mut self, width: usize, height: usize) {
-        self.grid = Array2::from_elem((width, height), self.default_block);
+        self.grid = Array2::from_elem((width, height), BlockType::Empty);
         self.chunks_edited = Array2::from_elem(
             (width.div_ceil(CHUNK_SIZE), height.div_ceil(CHUNK_SIZE)),
             false,
@@ -142,25 +140,25 @@ impl Map {
 
     pub fn apply_kernel(
         &mut self,
-        walker: &Walker,
+        pos: Vector2,
         kernel: &Kernel,
         block_type: BlockType,
-    ) -> Result<(), &'static str> {
+    ) -> bool {
         let offset: usize = kernel.size / 2; // offset of kernel wrt. position (top/left)
         let extend: usize = kernel.size - offset; // how much kernel extends position (bot/right)
 
-        let exceeds_left_bound = walker.pos.x < offset;
-        let exceeds_upper_bound = walker.pos.y < offset;
-        let exceeds_right_bound = (walker.pos.x + extend) > self.width();
-        let exceeds_lower_bound = (walker.pos.y + extend) > self.height();
+        let exceeds_left_bound = pos.x < offset;
+        let exceeds_upper_bound = pos.y < offset;
+        let exceeds_right_bound = (pos.x + extend) > self.width();
+        let exceeds_lower_bound = (pos.y + extend) > self.height();
 
         if exceeds_left_bound || exceeds_upper_bound || exceeds_right_bound || exceeds_lower_bound {
-            return Err("Kernel out of bounds");
+            return false;
         }
 
-        let root_pos = Position::new(walker.pos.x - offset, walker.pos.y - offset);
+        let root_pos = Vector2::new(pos.x - offset, pos.y - offset);
         for ((kernel_x, kernel_y), kernel_active) in kernel.vector.indexed_iter() {
-            let absolute_pos = Position::new(root_pos.x + kernel_x, root_pos.y + kernel_y);
+            let absolute_pos = Vector2::new(root_pos.x + kernel_x, root_pos.y + kernel_y);
             if *kernel_active {
                 let current_type = &self.grid[absolute_pos.as_index()];
 
@@ -178,22 +176,22 @@ impl Map {
             }
         }
 
-        Ok(())
+        return true;
     }
 
-    fn pos_to_chunk_pos(&self, pos: Position) -> Position {
-        Position::new(pos.x / self.chunk_size, pos.y / self.chunk_size)
+    fn pos_to_chunk_pos(&self, pos: Vector2) -> Vector2 {
+        Vector2::new(pos.x / self.chunk_size, pos.y / self.chunk_size)
     }
 
-    pub fn pos_in_bounds(&self, pos: &Position) -> bool {
+    pub fn pos_in_bounds(&self, pos: &Vector2) -> bool {
         // we dont have to check for lower bound, because of usize
         pos.x < self.width() && pos.y < self.height()
     }
 
     pub fn check_area_exists(
         &self,
-        top_left: Position,
-        bot_right: Position,
+        top_left: Vector2,
+        bot_right: Vector2,
         value: BlockType,
     ) -> Result<bool, &'static str> {
         if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
@@ -209,8 +207,8 @@ impl Map {
 
     pub fn check_area_all(
         &self,
-        top_left: Position,
-        bot_right: Position,
+        top_left: Vector2,
+        bot_right: Vector2,
         value: BlockType,
     ) -> Result<bool, &'static str> {
         if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
@@ -225,8 +223,8 @@ impl Map {
 
     pub fn count_occurence_in_area(
         &self,
-        top_left: Position,
-        bot_right: Position,
+        top_left: Vector2,
+        bot_right: Vector2,
         value: BlockType,
     ) -> Result<usize, &'static str> {
         if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
@@ -241,8 +239,8 @@ impl Map {
 
     pub fn set_area(
         &mut self,
-        top_left: Position,
-        bot_right: Position,
+        top_left: Vector2,
+        bot_right: Vector2,
         value: BlockType,
         overide: Overwrite,
     ) {
@@ -258,10 +256,10 @@ impl Map {
 
         for ((x, y), current_value) in view.indexed_iter_mut() {
             if overide.will_override(current_value) {
-                *current_value = value.clone();
+                *current_value = value;
 
                 let chunk_pos =
-                    Position::new((top_left.x + x) / chunk_size, (top_left.y + y) / chunk_size);
+                    Vector2::new((top_left.x + x) / chunk_size, (top_left.y + y) / chunk_size);
                 self.chunks_edited[chunk_pos.as_index()] = true;
             }
         }
@@ -270,13 +268,13 @@ impl Map {
     /// sets the outline of an area define by two positions
     pub fn set_area_border(
         &mut self,
-        top_left: Position,
-        bot_right: Position,
+        top_left: Vector2,
+        bot_right: Vector2,
         value: BlockType,
         overwrite: Overwrite,
     ) {
-        let top_right = Position::new(bot_right.x, top_left.y);
-        let bot_left = Position::new(top_left.x, bot_right.y);
+        let top_right = Vector2::new(bot_right.x, top_left.y);
+        let bot_left = Vector2::new(top_left.x, bot_right.y);
 
         self.set_area(top_left, top_right, value, overwrite);
         self.set_area(top_right, bot_right, value, overwrite);

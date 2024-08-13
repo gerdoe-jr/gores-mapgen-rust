@@ -73,6 +73,8 @@ impl<T: Copy> RandomDist<T> {
     }
 
     pub fn weights(&self) -> WeightedAliasIndex<f32> {
+        // TODO: cache weights somehow, config can be changed middleway though
+        // is it necessary though? ^
         WeightedAliasIndex::new(
             self.config
                 .values
@@ -96,14 +98,20 @@ pub fn random_seed() -> Seed {
 
 #[derive(Debug, Clone)]
 pub struct Random {
+    seed: Seed,
     prng: SmallRng,
 }
 
 impl Random {
     pub fn new(seed: Seed) -> Self {
         Random {
+            seed,
             prng: SmallRng::seed_from_u64(seed),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.prng = SmallRng::seed_from_u64(self.seed);
     }
 
     pub fn sample_value<T: Copy>(&mut self, dist: &RandomDist<T>) -> T {
@@ -111,7 +119,6 @@ impl Random {
     }
 
     pub fn sample_index<T: Copy>(&mut self, dist: &RandomDist<T>) -> usize {
-        // TODO: cache weights somehow, config can be changed middleway though
         dist.weights().sample(&mut self.prng)
     }
 

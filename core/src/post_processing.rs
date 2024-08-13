@@ -1,7 +1,7 @@
 use crate::{
     dt,
     map::{BlockType, Map, Overwrite},
-    position::{Position, ShiftDirection},
+    position::{Vector2, Direction},
 };
 
 use std::{f32::consts::SQRT_2, usize};
@@ -85,8 +85,8 @@ pub fn fill_open_areas(map: &mut Map, max_distance: f32) -> Array2<f32> {
 }
 
 // returns a vec of corner candidates and their respective direction to the wall
-pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'static str> {
-    let mut candidates: Vec<(Position, ShiftDirection)> = Vec::new();
+pub fn find_corners(map: &Map) -> Result<Vec<(Vector2, Direction)>, &'static str> {
+    let mut candidates: Vec<(Vector2, Direction)> = Vec::new();
 
     let width = map.width();
     let height = map.height();
@@ -114,7 +114,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[3, 2]],
                         &window[[3, 3]],
                     ],
-                    ShiftDirection::Right,
+                    Direction::Right,
                 ),
                 // R2
                 (
@@ -125,7 +125,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[3, 3]],
                         &window[[3, 4]],
                     ],
-                    ShiftDirection::Right,
+                    Direction::Right,
                 ),
                 // L1
                 (
@@ -136,7 +136,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[1, 2]],
                         &window[[1, 3]],
                     ],
-                    ShiftDirection::Left,
+                    Direction::Left,
                 ),
                 // L2
                 (
@@ -147,7 +147,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[1, 3]],
                         &window[[1, 4]],
                     ],
-                    ShiftDirection::Left,
+                    Direction::Left,
                 ),
                 // U1
                 (
@@ -158,7 +158,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[2, 1]],
                         &window[[3, 1]],
                     ],
-                    ShiftDirection::Up,
+                    Direction::Up,
                 ),
                 // U2
                 (
@@ -169,7 +169,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[3, 1]],
                         &window[[4, 1]],
                     ],
-                    ShiftDirection::Up,
+                    Direction::Up,
                 ),
                 // D1
                 (
@@ -180,7 +180,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[2, 3]],
                         &window[[3, 3]],
                     ],
-                    ShiftDirection::Down,
+                    Direction::Down,
                 ),
                 // D2
                 (
@@ -191,7 +191,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                         &window[[3, 3]],
                         &window[[4, 3]],
                     ],
-                    ShiftDirection::Down,
+                    Direction::Down,
                 ),
             ];
 
@@ -200,7 +200,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
                     .iter()
                     .all(|block_type: &&BlockType| is_freeze(**block_type))
                 {
-                    candidates.push((Position::new(window_x, window_y), dir));
+                    candidates.push((Vector2::new(window_x, window_y), dir));
                 }
             }
         }
@@ -210,17 +210,17 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Position, ShiftDirection)>, &'stat
 }
 
 pub struct Skip {
-    start_pos: Position,
-    end_pos: Position,
+    start_pos: Vector2,
+    end_pos: Vector2,
     length: usize,
-    direction: ShiftDirection,
+    direction: Direction,
 }
 
 /// if a skip has been found, this returns the end position and length
 pub fn check_corner_skip(
     map: &Map,
-    init_pos: Position,
-    shift: ShiftDirection,
+    init_pos: Vector2,
+    shift: Direction,
     tunnel_bounds: (usize, usize),
 ) -> Option<Skip> {
     let mut pos = init_pos.clone();
@@ -229,7 +229,7 @@ pub fn check_corner_skip(
     let mut stage = 0;
     while stage != 4 && length < tunnel_bounds.1 {
         // shift into given direction, abort if invalid shift
-        if pos.shift_in_direction(shift, &map).is_err() {
+        if !pos.shift_in_direction(shift, &map) {
             return None;
         };
         let curr_block_type = map.grid.get(pos.as_index()).unwrap();
@@ -271,11 +271,11 @@ pub fn count_skip_neighbours(
     skip: &Skip,
     offset: usize,
 ) -> Result<usize, &'static str> {
-    let top_left = Position::new(
+    let top_left = Vector2::new(
         usize::min(skip.start_pos.x, skip.end_pos.x),
         usize::min(skip.start_pos.y, skip.end_pos.y),
     );
-    let bot_right = Position::new(
+    let bot_right = Vector2::new(
         usize::max(skip.start_pos.x, skip.end_pos.x),
         usize::max(skip.start_pos.y, skip.end_pos.y),
     );
@@ -283,7 +283,7 @@ pub fn count_skip_neighbours(
     let offset: i32 = offset as i32;
 
     match skip.direction {
-        ShiftDirection::Left | ShiftDirection::Right => {
+        Direction::Left | Direction::Right => {
             let bot_count = map.count_occurence_in_area(
                 top_left.shifted_by(0, offset)?,
                 bot_right.shifted_by(0, offset)?,
@@ -297,7 +297,7 @@ pub fn count_skip_neighbours(
 
             Ok(usize::min(bot_count, top_count))
         }
-        ShiftDirection::Up | ShiftDirection::Down => {
+        Direction::Up | Direction::Down => {
             let left_count = map.count_occurence_in_area(
                 top_left.shifted_by(-offset, 0)?,
                 bot_right.shifted_by(-offset, 0)?,
@@ -319,11 +319,11 @@ pub fn generate_skip(
     skip: &Skip,
     block_type: BlockType,
 ) -> Result<(), &'static str> {
-    let top_left = Position::new(
+    let top_left = Vector2::new(
         usize::min(skip.start_pos.x, skip.end_pos.x),
         usize::min(skip.start_pos.y, skip.end_pos.y),
     );
-    let bot_right = Position::new(
+    let bot_right = Vector2::new(
         usize::max(skip.start_pos.x, skip.end_pos.x),
         usize::max(skip.start_pos.y, skip.end_pos.y),
     );
@@ -341,7 +341,7 @@ pub fn generate_skip(
     }
 
     match skip.direction {
-        ShiftDirection::Left | ShiftDirection::Right => {
+        Direction::Left | Direction::Right => {
             map.set_area(
                 top_left.shifted_by(0, -1)?,
                 bot_right.shifted_by(0, -1)?,
@@ -355,7 +355,7 @@ pub fn generate_skip(
                 Overwrite::ReplaceSolidOnly,
             );
         }
-        ShiftDirection::Up | ShiftDirection::Down => {
+        Direction::Up | Direction::Down => {
             map.set_area(
                 top_left.shifted_by(-1, 0)?,
                 bot_right.shifted_by(-1, 0)?,
@@ -428,10 +428,10 @@ pub fn generate_all_skips(
             let skip_other = &skips[other_index];
 
             // check if skips are too close
-            if skip.start_pos.distance_squared(&skip_other.start_pos) < min_spacing_sqr
-                || skip.start_pos.distance_squared(&skip_other.end_pos) < min_spacing_sqr
-                || skip.end_pos.distance_squared(&skip_other.start_pos) < min_spacing_sqr
-                || skip.end_pos.distance_squared(&skip_other.end_pos) < min_spacing_sqr
+            if skip.start_pos.distance_squared(skip_other.start_pos) < min_spacing_sqr
+                || skip.start_pos.distance_squared(skip_other.end_pos) < min_spacing_sqr
+                || skip.end_pos.distance_squared(skip_other.start_pos) < min_spacing_sqr
+                || skip.end_pos.distance_squared(skip_other.end_pos) < min_spacing_sqr
             {
                 valid_skips[other_index] = SkipStatus::Invalid;
             }
@@ -500,8 +500,8 @@ pub fn remove_freeze_blobs(map: &mut Map, min_freeze_size: usize) {
             }
 
             // check all freeze blocks that are connected to the current block
-            let mut blob_visited = Vec::<Position>::new();
-            let mut blob_visit_next = vec![Position::new(x, y)];
+            let mut blob_visited = Vec::<Vector2>::new();
+            let mut blob_visit_next = vec![Vector2::new(x, y)];
             let mut blob_unconnected = true; // for now we assume that the current blob is unconnected
             let mut blob_size = 0;
             while blob_unconnected && !blob_visit_next.is_empty() {
@@ -535,7 +535,7 @@ pub fn remove_freeze_blobs(map: &mut Map, min_freeze_size: usize) {
                     }
 
                     // queue neighboring unmarked & freeze blocks for visit
-                    let abs_pos = Position::new(pos.x + win_x - 1, pos.y + win_y - 1);
+                    let abs_pos = Vector2::new(pos.x + win_x - 1, pos.y + win_y - 1);
 
                     // only consider freeze blocks
                     if !other_block_type.is_freeze() {

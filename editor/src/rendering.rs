@@ -1,7 +1,7 @@
 use macroquad::color::colors;
 use macroquad::color::Color;
 use macroquad::shapes::*;
-use mapgen_core::{map::BlockType, map::KernelType, position::Position, walker::Walker};
+use mapgen_core::{map::BlockType, map::KernelType, position::Vector2, walker::Walker};
 use ndarray::Array2;
 
 fn blocktype_to_color(value: &BlockType) -> Color {
@@ -77,16 +77,16 @@ pub fn draw_chunked_grid(
 
 pub fn draw_walker(walker: &Walker) {
     draw_rectangle_lines(
-        walker.pos.x as f32,
-        walker.pos.y as f32,
+        walker.current_pos.x as f32,
+        walker.current_pos.y as f32,
         1.0,
         1.0,
         2.0,
         colors::YELLOW,
     );
     draw_circle(
-        walker.pos.x as f32 + 0.5,
-        walker.pos.y as f32 + 0.5,
+        walker.current_pos.x as f32 + 0.5,
+        walker.current_pos.y as f32 + 0.5,
         0.25,
         colors::BLUE,
     )
@@ -99,8 +99,8 @@ pub fn draw_walker_kernel(walker: &Walker, kernel_type: KernelType) {
     };
     let offset: usize = kernel.size / 2; // offset of kernel wrt. position (top/left)
 
-    let root_x = walker.pos.x.checked_sub(offset);
-    let root_y = walker.pos.y.checked_sub(offset);
+    let root_x = walker.current_pos.x.checked_sub(offset);
+    let root_y = walker.current_pos.y.checked_sub(offset);
 
     if root_x.is_none() || root_y.is_none() {
         return; // dont draw as the following draw operation would fail
@@ -123,7 +123,7 @@ pub fn draw_walker_kernel(walker: &Walker, kernel_type: KernelType) {
     }
 }
 
-pub fn draw_waypoints(waypoints: &[Position]) {
+pub fn draw_waypoints(waypoints: &[Vector2]) {
     for pos in waypoints.iter() {
         draw_circle(pos.x as f32 + 0.5, pos.y as f32 + 0.5, 1.0, colors::RED)
     }

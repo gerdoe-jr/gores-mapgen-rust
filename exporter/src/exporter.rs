@@ -1,6 +1,6 @@
 use mapgen_core::{
     map::{GameTile, Map},
-    position::Position,
+    position::Vector2,
 };
 use ndarray::Array2;
 use serde::{self, Deserialize, Serialize};
@@ -163,7 +163,7 @@ impl<'a, 'b> Exporter<'a, 'b> {
                 if layer_type == GameTile::Freeze && block_type == GameTile::Hookable {
                     let shifts = &[(-1, 0), (0, -1), (1, 0), (0, 1)];
                     for shift in shifts {
-                        let neighbor_type = Position::new(x, y)
+                        let neighbor_type = Vector2::new(x, y)
                             .shifted_by(shift.0, shift.1)
                             .ok()
                             .and_then(|pos| self.map.grid.get(pos.as_index()));

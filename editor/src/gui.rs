@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env, isize};
 
 use egui::{ComboBox, RichText, ScrollArea};
-use mapgen_core::position::{Position, ShiftDirection};
+use mapgen_core::position::{Vector2, Direction};
 use mapgen_core::random::{random_seed, ProbableValue, RandomDist};
 use mapgen_core::walker::Pulse;
 use tinyfiledialogs;
@@ -212,7 +212,7 @@ pub fn edit_probability_f32(ui: &mut Ui, value: &mut (f32, f32)) {
     });
 }
 
-pub fn edit_position(ui: &mut Ui, position: &mut Position) {
+pub fn edit_position(ui: &mut Ui, position: &mut Vector2) {
     ui.horizontal(|ui| {
         ui.label("x:");
         ui.add(egui::widgets::DragValue::new(&mut position.x));
@@ -401,7 +401,7 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
 
         ScrollArea::vertical().show(ui, |ui| {
             ui.separator();
-            
+
             let is_setup = editor.is_setup();
             // =======================================[ GENERATION CONFIG EDIT ]===================================
             if editor.edit_gen_config {
@@ -501,7 +501,7 @@ pub fn sidebar(ctx: &Context, editor: &mut Editor) {
                     random_dist_edit(
                         ui,
                         &mut walker_config.shift_weights,
-                        None::<fn(&mut Ui, &mut ShiftDirection)>, // TODO: this is stupid wtwf
+                        None::<fn(&mut Ui, &mut Direction)>, // TODO: this is stupid wtwf
                         "step weights",
                         false,
                         true,

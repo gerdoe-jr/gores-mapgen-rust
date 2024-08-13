@@ -8,9 +8,9 @@ use std::{
 use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
-    map::{BlockType, Map},
+    map::Map,
     random::{random_seed, Random, Seed},
-    walker::{Walker, WalkerParams, NormalWaypoints},
+    walker::{NormalWaypoints, Walker, WalkerParams},
 };
 use mapgen_exporter::{Exporter, ExporterConfig};
 
@@ -134,7 +134,7 @@ impl ServerBridge {
 
         walker.set_waypoints(way.clone()).set_bounds(500, 500);
 
-        let map = Map::new(500, 500, BlockType::Hookable);
+        let map = Map::new(500, 500);
 
         let generator = Generator::new(map, walker, gen.clone());
 

@@ -5,5 +5,6 @@ pub mod position;
 pub mod post_processing;
 pub mod random;
 pub mod walker;
+pub mod mutators;
 
 mod dt;

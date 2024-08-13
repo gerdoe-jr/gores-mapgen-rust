@@ -5,16 +5,16 @@ use std::usize;
 //
 // while glam has nice performance benefits, the amount of expensive operations
 // on the position vector will be very limited, so this should be fine..
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Position {
+pub struct Vector2 {
     pub x: usize,
     pub y: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ShiftDirection {
+pub enum Direction {
     #[default]
     Up = 0,
     Right = 1,
@@ -22,9 +22,9 @@ pub enum ShiftDirection {
     Left = 3,
 }
 
-impl Position {
-    pub fn new(x: usize, y: usize) -> Position {
-        Position { x, y }
+impl Vector2 {
+    pub fn new(x: usize, y: usize) -> Vector2 {
+        Vector2 { x, y }
     }
 
     pub fn as_index(&self) -> [usize; 2] {
@@ -32,7 +32,7 @@ impl Position {
     }
 
     /// returns a new position shifted by some x and y value
-    pub fn shifted_by(&self, x_shift: i32, y_shift: i32) -> Result<Position, &'static str> {
+    pub fn shifted_by(&self, x_shift: i32, y_shift: i32) -> Result<Vector2, &'static str> {
         let new_x = match x_shift >= 0 {
             true => self.x + (x_shift as usize),
             false => self
@@ -49,38 +49,38 @@ impl Position {
                 .ok_or("invalid shift")?,
         };
 
-        Ok(Position::new(new_x, new_y))
+        Ok(Vector2::new(new_x, new_y))
     }
 
     pub fn shift_in_direction(
         &mut self,
-        shift: ShiftDirection,
+        shift: Direction,
         map: &Map,
-    ) -> Result<(), &'static str> {
+    ) -> bool {
         if !self.is_shift_valid(shift, map) {
-            return Err("invalid shift");
+            return false;
         }
 
         match shift {
-            ShiftDirection::Up => self.y -= 1,
-            ShiftDirection::Right => self.x += 1,
-            ShiftDirection::Down => self.y += 1,
-            ShiftDirection::Left => self.x -= 1,
+            Direction::Up => self.y -= 1,
+            Direction::Right => self.x += 1,
+            Direction::Down => self.y += 1,
+            Direction::Left => self.x -= 1,
         }
 
-        Ok(())
+        return true;
     }
 
-    pub fn is_shift_valid(&self, shift: ShiftDirection, map: &Map) -> bool {
+    pub fn is_shift_valid(&self, shift: Direction, map: &Map) -> bool {
         match shift {
-            ShiftDirection::Up => self.y > 0,
-            ShiftDirection::Right => self.x < map.width() - 1,
-            ShiftDirection::Down => self.y < map.height() - 1,
-            ShiftDirection::Left => self.x > 0,
+            Direction::Up => self.y > 0,
+            Direction::Right => self.x < map.width() - 1,
+            Direction::Down => self.y < map.height() - 1,
+            Direction::Left => self.x > 0,
         }
     }
 
-    pub fn get_greedy_shift(&self, goal: &Position) -> ShiftDirection {
+    pub fn get_greedy_shift(&self, goal: &Vector2) -> Direction {
         let x_diff = goal.x as isize - self.x as isize;
         let x_abs_diff = x_diff.abs();
         let y_diff = goal.y as isize - self.y as isize;
@@ -89,35 +89,35 @@ impl Position {
         // check whether x or y is dominant
         if x_abs_diff > y_abs_diff {
             if x_diff.is_positive() {
-                ShiftDirection::Right
+                Direction::Right
             } else {
-                ShiftDirection::Left
+                Direction::Left
             }
         } else if y_diff.is_positive() {
-            ShiftDirection::Down
+            Direction::Down
         } else {
-            ShiftDirection::Up
+            Direction::Up
         }
     }
 
     /// squared euclidean distance between two Positions
-    pub fn distance_squared(&self, rhs: &Position) -> usize {
+    pub fn distance_squared(&self, rhs: Vector2) -> usize {
         self.x.abs_diff(rhs.x).saturating_pow(2) + self.y.abs_diff(rhs.y).saturating_pow(2)
     }
 
     /// returns a Vec with all possible shifts, sorted by how close they get
     /// towards the goal position
-    pub fn get_rated_shifts(&self, goal: &Position, map: &Map) -> [ShiftDirection; 4] {
+    pub fn get_rated_shifts(&self, goal: Vector2, map: &Map) -> [Direction; 4] {
         let mut shifts = [
-            ShiftDirection::Left,
-            ShiftDirection::Up,
-            ShiftDirection::Right,
-            ShiftDirection::Down,
+            Direction::Left,
+            Direction::Up,
+            Direction::Right,
+            Direction::Down,
         ];
 
         shifts.sort_by_cached_key(|&shift| {
             let mut shifted_pos = self.clone();
-            if let Ok(()) = shifted_pos.shift_in_direction(shift, map) {
+            if shifted_pos.shift_in_direction(shift, map) {
                 shifted_pos.distance_squared(goal)
             } else {
                 // assign maximum distance to invalid shifts
