@@ -1,148 +1,67 @@
+use std::collections::HashMap;
+
 use crate::{kernel::Kernel, position::Vector2};
 use ndarray::{s, Array2};
+use twmap::{AnyTile, GameTile, Layer, LayerKind, Tele, TileFlags, TilemapLayer, TwMap, Version};
 
-const CHUNK_SIZE: usize = 5;
+// TileTag::Empty | TileTag::EmptyReserved => 0,
+// TileTag::Hookable | TileTag::Platform => 1,
+// TileTag::Freeze => 9,
+// TileTag::Spawn => 192,
+// TileTag::Start => 33,
+// TileTag::Finish => 34,
 
-#[derive(Debug, PartialEq)]
-pub enum GameTile {
-    Hookable,
-    Freeze,
-    Empty,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BlockType {
-    Empty,
-    /// Empty Block that should not be overwritten
-    EmptyReserved,
-    Hookable,
-    Freeze,
-    Spawn,
-    Start,
-    Finish,
-    Platform,
-}
-
-impl BlockType {
-    /// maps BlockType to tw game layer id for map export
-    pub fn to_ingame_id(&self) -> u8 {
-        match self {
-            BlockType::Empty | BlockType::EmptyReserved => 0,
-            BlockType::Hookable | BlockType::Platform => 1,
-            BlockType::Freeze => 9,
-            BlockType::Spawn => 192,
-            BlockType::Start => 33,
-            BlockType::Finish => 34,
-        }
-    }
-
-    pub fn to_game_tile(&self) -> GameTile {
-        match self {
-            BlockType::Platform | BlockType::Hookable => GameTile::Hookable,
-            BlockType::Empty | BlockType::EmptyReserved => GameTile::Empty,
-            BlockType::Freeze => GameTile::Freeze,
-
-            // every other block is just mapped to empty
-            _ => GameTile::Empty,
-        }
-    }
-
-    pub fn is_solid(&self) -> bool {
-        matches!(self, BlockType::Hookable | BlockType::Platform)
-    }
-    pub fn is_freeze(&self) -> bool {
-        matches!(self, BlockType::Freeze)
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum Overwrite {
-    /// Replace EVERYTHING
-    Force,
-
-    /// Replace Hookable+Freeze
-    ReplaceSolidFreeze,
-
-    /// Replace Hookable
-    ReplaceSolidOnly,
-
-    /// Replace Empty
-    ReplaceEmptyOnly,
-
-    /// Replace Freeze+Empty
-    ReplaceNonSolid,
-
-    /// Replace Freeze+Empty+EmptyReserved
-    ReplaceNonSolidForce,
-}
-
-impl Overwrite {
-    fn will_override(&self, btype: &BlockType) -> bool {
-        match self {
-            Overwrite::Force => true,
-            Overwrite::ReplaceSolidFreeze => {
-                matches!(&btype, BlockType::Hookable | BlockType::Freeze)
-            }
-            Overwrite::ReplaceSolidOnly => matches!(&btype, BlockType::Hookable),
-            Overwrite::ReplaceEmptyOnly => matches!(&btype, BlockType::Empty),
-            Overwrite::ReplaceNonSolid => matches!(&btype, BlockType::Freeze | BlockType::Empty),
-            Overwrite::ReplaceNonSolidForce => matches!(
-                &btype,
-                BlockType::Freeze | BlockType::Empty | BlockType::EmptyReserved
-            ),
-        }
-    }
-}
-
-pub enum KernelType {
-    Outer,
-    Inner,
-}
-
-#[derive(Debug)]
 pub struct Map {
-    pub grid: Array2<BlockType>,
-    pub chunks_edited: Array2<bool>, // TODO: make this optional in case editor is not used!
-    pub chunk_size: usize,
+    width: usize,
+    height: usize,
+    raw: TwMap
 }
 
 impl Map {
-    pub fn new(width: usize, height: usize) -> Map {
-        Map {
-            grid: Array2::from_elem((width, height), BlockType::Empty),
-            chunks_edited: Array2::from_elem(
-                (width.div_ceil(CHUNK_SIZE), height.div_ceil(CHUNK_SIZE)),
-                false,
-            ),
-            chunk_size: CHUNK_SIZE
+    pub fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            raw: TwMap::empty(Version::DDNet06)
         }
     }
 
     pub fn clear(&mut self) {
-        self.grid.fill(BlockType::Empty)
+        fn clear_layer(layer: &mut impl TilemapLayer) {
+            layer.tiles_mut().unwrap_mut().fill(Default::default())
+        }
+
+        self.raw.physics_group_mut().layers.iter_mut().map(|layer| clear_layer(layer));
     }
 
     pub fn width(&self) -> usize {
-        self.grid.dim().0
+        self.width
     }
 
     pub fn height(&self) -> usize {
-        self.grid.dim().1
+        self.height
     }
 
     pub fn reshape(&mut self, width: usize, height: usize) {
-        self.grid = Array2::from_elem((width, height), BlockType::Empty);
-        self.chunks_edited = Array2::from_elem(
-            (width.div_ceil(CHUNK_SIZE), height.div_ceil(CHUNK_SIZE)),
-            false,
-        );
+        self.width = width;
+        self.height = height;
+
+        fn reshape_layer(width: usize, height: usize, layer: &mut impl TilemapLayer) {
+            let loaded = layer.tiles_mut().unwrap_mut();
+            *loaded = Array2::from_elem((width, height), Default::default());
+        }
+
+        self.raw_layers.values_mut().map(|layer| {
+            reshape_layer(width, height, layer);
+        });
     }
 
     pub fn apply_kernel(
         &mut self,
         pos: Vector2,
         kernel: &Kernel,
-        block_type: BlockType,
+        kind: LayerKind,
+        tile: impl AnyTile,
     ) -> bool {
         let offset: usize = kernel.size / 2; // offset of kernel wrt. position (top/left)
         let extend: usize = kernel.size - offset; // how much kernel extends position (bot/right)
@@ -163,24 +82,17 @@ impl Map {
                 let current_type = &self.grid[absolute_pos.as_index()];
 
                 let new_type = match current_type {
-                    BlockType::Hookable | BlockType::Freeze => Some(block_type.clone()),
+                    TileTag::Hookable | TileTag::Freeze => Some(tile.clone()),
                     _ => None,
                 };
 
                 if let Some(new_type) = new_type {
                     self.grid[absolute_pos.as_index()] = new_type;
                 }
-
-                let chunk_pos = self.pos_to_chunk_pos(absolute_pos);
-                self.chunks_edited[chunk_pos.as_index()] = true;
             }
         }
 
         return true;
-    }
-
-    fn pos_to_chunk_pos(&self, pos: Vector2) -> Vector2 {
-        Vector2::new(pos.x / self.chunk_size, pos.y / self.chunk_size)
     }
 
     pub fn pos_in_bounds(&self, pos: &Vector2) -> bool {
@@ -192,7 +104,8 @@ impl Map {
         &self,
         top_left: Vector2,
         bot_right: Vector2,
-        value: BlockType,
+        kind: LayerKind,
+        tile: impl AnyTile,
     ) -> Result<bool, &'static str> {
         if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
             return Err("checking area out of bounds");
@@ -209,7 +122,8 @@ impl Map {
         &self,
         top_left: Vector2,
         bot_right: Vector2,
-        value: BlockType,
+        kind: LayerKind,
+        tile: impl AnyTile,
     ) -> Result<bool, &'static str> {
         if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
             return Err("checking area out of bounds");
@@ -225,7 +139,8 @@ impl Map {
         &self,
         top_left: Vector2,
         bot_right: Vector2,
-        value: BlockType,
+        kind: LayerKind,
+        tile: impl AnyTile,
     ) -> Result<usize, &'static str> {
         if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
             return Err("checking area out of bounds");
@@ -241,27 +156,17 @@ impl Map {
         &mut self,
         top_left: Vector2,
         bot_right: Vector2,
-        value: BlockType,
-        overide: Overwrite,
+        kind: LayerKind,
+        tile: impl AnyTile,
     ) {
-        if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
-            return;
-        }
-
-        let chunk_size = self.chunk_size;
+        // don't check if in bounds, user should check it theirselves
 
         let mut view = self
             .grid
             .slice_mut(s![top_left.x..=bot_right.x, top_left.y..=bot_right.y]);
 
-        for ((x, y), current_value) in view.indexed_iter_mut() {
-            if overide.will_override(current_value) {
-                *current_value = value;
-
-                let chunk_pos =
-                    Vector2::new((top_left.x + x) / chunk_size, (top_left.y + y) / chunk_size);
-                self.chunks_edited[chunk_pos.as_index()] = true;
-            }
+        for current_value in view.iter_mut() {
+            *current_value = value;
         }
     }
 
@@ -270,11 +175,14 @@ impl Map {
         &mut self,
         top_left: Vector2,
         bot_right: Vector2,
-        value: BlockType,
-        overwrite: Overwrite,
+        value: TileTag,
     ) {
         let top_right = Vector2::new(bot_right.x, top_left.y);
         let bot_left = Vector2::new(top_left.x, bot_right.y);
+
+        for x in top_left.x..=bot_right.x {
+            self.
+        }
 
         self.set_area(top_left, top_right, value, overwrite);
         self.set_area(top_right, bot_right, value, overwrite);

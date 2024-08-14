@@ -8,7 +8,7 @@ use std::{
 use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
-    map::{BlockType, Map},
+    map::{TileTag, Map},
     random::{random_seed, Random},
     walker::{NormalWaypoints, Walker, WalkerParams},
 };
@@ -37,7 +37,7 @@ fn main() {
 
     walker.set_waypoints(way).set_bounds(300, 150);
 
-    let map = Map::new(300, 150, BlockType::Hookable);
+    let map = Map::new(300, 150, TileTag::Hookable);
     let mut generator = Generator::new(map, walker, gen);
 
     let now = Instant::now();

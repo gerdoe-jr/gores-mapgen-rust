@@ -1,5 +1,5 @@
 use crate::{
-    map::{BlockType, Map, Overwrite}, position::Vector2, random::{Random, Seed}, walker::Walker
+    map::{Map}, position::Vector2, random::{Random, Seed}, walker::Walker
 };
 
 pub struct Generator {
@@ -38,7 +38,7 @@ pub fn generate_room(
     pos: Vector2,
     room_size: i32,
     platform_margin: i32,
-    zone_type: Option<BlockType>,
+    zone_type: Option<TileTag>,
 ) -> Result<(), &'static str> {
     if !map.pos_in_bounds(&pos.shifted_by(room_size + 2, room_size + 1)?)
         || !map.pos_in_bounds(&pos.shifted_by(room_size + 1, room_size + 1)?)
@@ -50,7 +50,7 @@ pub fn generate_room(
     map.set_area_border(
         pos.shifted_by(-room_size, -room_size)?,
         pos.shifted_by(room_size, room_size)?,
-        BlockType::Empty,
+        TileTag::Empty,
         Overwrite::Force,
     );
 
@@ -58,7 +58,7 @@ pub fn generate_room(
     map.set_area(
         pos.shifted_by(-room_size + 1, -room_size + 1)?,
         pos.shifted_by(room_size - 1, room_size - 1)?,
-        BlockType::EmptyReserved,
+        TileTag::EmptyReserved,
         Overwrite::Force,
     );
 
@@ -73,18 +73,18 @@ pub fn generate_room(
             );
 
             // set spawns
-            if zone_type == BlockType::Start {
+            if zone_type == TileTag::Start {
                 map.set_area(
                     pos.shifted_by(-(room_size - platform_margin), room_size - 1)?,
                     pos.shifted_by(room_size - platform_margin, room_size - 1)?,
-                    BlockType::Spawn,
+                    TileTag::Spawn,
                     Overwrite::Force,
                 );
 
                 map.set_area(
                     pos.shifted_by(-(room_size - platform_margin), room_size + 1)?,
                     pos.shifted_by(room_size - platform_margin, room_size + 1)?,
-                    BlockType::Platform,
+                    TileTag::Platform,
                     Overwrite::Force,
                 );
             }
@@ -94,7 +94,7 @@ pub fn generate_room(
             map.set_area(
                 pos.shifted_by(-(room_size - platform_margin), room_size - 3)?,
                 pos.shifted_by(room_size - platform_margin, room_size - 3)?,
-                BlockType::Platform,
+                TileTag::Platform,
                 Overwrite::Force,
             );
         }

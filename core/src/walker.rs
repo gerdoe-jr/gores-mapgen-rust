@@ -44,8 +44,8 @@ pub struct Walker {
 }
 
 impl Walker {
-    pub fn new(prng: Random) -> Walker {
-        Walker {
+    pub fn new(prng: Random) -> Self {
+        Self {
             prev_state: WalkerState::Idling,
             curr_state: WalkerState::Idling,
             next_state: WalkerState::Idling,
@@ -55,6 +55,21 @@ impl Walker {
         }
     }
 
+    /// not used
+    /// use for "multi-seed" generation
+    /// do. never. call. seed. cum.
+    /// it's not a "multi-cum"
+    pub fn from_state(state: WalkerState) -> Self {
+        Self {
+            prev_state: state,
+            curr_state: state,
+            next_state: state,
+            raw_waypoints: NormalWaypoints::new(),
+            prng: Random::new(0),
+            map_bounds: Vector2::new(0, 0)
+        }
+    } 
+
     pub fn previous_state(&self) -> &WalkerState {
         &self.prev_state
     }
@@ -63,7 +78,11 @@ impl Walker {
         &self.curr_state
     }
 
-    pub fn next_state(&mut self) -> &mut WalkerState {
+    pub fn next_state(&self) -> &WalkerState {
+        &self.next_state
+    }
+
+    pub fn next_state_mut(&mut self) -> &mut WalkerState {
         &mut self.next_state
     }
 
@@ -77,6 +96,12 @@ impl Walker {
         self.prng.reset();
     }
 
+    pub fn set_random(&mut self, prng: Random) -> &mut Self {
+        self.prng = prng;
+
+        self
+    }
+
     pub fn set_waypoints(&mut self, raw_waypoints: NormalWaypoints) -> &mut Self {
         self.raw_waypoints = raw_waypoints;
 
@@ -84,7 +109,8 @@ impl Walker {
     }
 
     pub fn set_bounds(&mut self, width: usize, height: usize) -> &mut Self {
-        self.map_bounds = Vector2::new(width, height);
+        self.map_bounds.x = width;
+        self.map_bounds.y = height;
 
         self
     }
@@ -93,13 +119,13 @@ impl Walker {
         self.map_bounds
     }
 
-    pub fn step(&mut self, mut mutator: impl Mutation, map: &mut Map) {
+    pub fn step(&mut self, mutator: &mut impl Mutation, map: &mut Map) -> bool {
         mutator.mutate_step(self, map);
 
         self.prev_state = self.curr_state; // take previous state
         self.curr_state = self.next_state; // take next state
         self.next_state = self.curr_state; // repeat next state
 
-        self
+        self.curr_state == WalkerState::Finished
     }
 }

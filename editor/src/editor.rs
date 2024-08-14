@@ -3,7 +3,7 @@ use std::{collections::HashMap, env};
 use mapgen_core::{
     generator::Generator,
     kernel::Kernel,
-    map::{BlockType, Map},
+    map::{TileTag, Map},
     random::{random_seed, Random, Seed},
     walker::Walker,
 };
@@ -221,7 +221,7 @@ impl Editor {
 
         walker.set_waypoints(way.clone());
 
-        let map = Map::new(500, 500, BlockType::Hookable);
+        let map = Map::new(500, 500, TileTag::Hookable);
 
         let generator = Generator::new(map, walker, gen.clone());
 

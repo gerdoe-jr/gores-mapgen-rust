@@ -5,7 +5,7 @@ use exporter::{Exporter, ExporterConfig};
 use mapgen_core::{
     generator::{Generator, GeneratorParams},
     kernel::Kernel,
-    map::{BlockType, Map},
+    map::{TileTag, Map},
     random::Random,
     walker::{NormalWaypoints, Walker, WalkerParams},
 };
@@ -100,7 +100,7 @@ fn main() {
                 .set_waypoints(way.clone())
                 .set_bounds(args.width, args.height);
 
-            let map = Map::new(args.width, args.height, BlockType::Hookable);
+            let map = Map::new(args.width, args.height, TileTag::Hookable);
 
             let mut generator = Generator::new(map, walker, gen);
 

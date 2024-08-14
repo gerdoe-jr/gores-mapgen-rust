@@ -1,6 +1,6 @@
 use crate::{
     dt,
-    map::{BlockType, Map, Overwrite},
+    map::{TileTag, Map, Overwrite},
     position::{Vector2, Direction},
 };
 
@@ -9,8 +9,8 @@ use std::{f32::consts::SQRT_2, usize};
 use dt::dt_bool;
 use ndarray::{s, Array2, ArrayBase, Dim, Ix2, ViewRepr};
 
-pub fn is_freeze(block_type: BlockType) -> bool {
-    block_type == BlockType::Freeze
+pub fn is_freeze(block_type: TileTag) -> bool {
+    block_type == TileTag::Freeze
 }
 
 /// Post processing step to fix all existing edge-bugs, as certain inner/outer kernel
@@ -24,7 +24,7 @@ pub fn fix_edge_bugs(map: &mut Map) -> Result<(), &'static str> {
     for x in 0..width {
         for y in 0..height {
             let value = &map.grid[[x, y]];
-            if *value == BlockType::Empty {
+            if *value == TileTag::Empty {
                 for dx in 0..=2 {
                     for dy in 0..=2 {
                         if dx == 1 && dy == 1 {
@@ -39,7 +39,7 @@ pub fn fix_edge_bugs(map: &mut Map) -> Result<(), &'static str> {
                             .ok_or("fix edge bug out of bounds")?;
                         if neighbor_x < width && neighbor_y < height {
                             let neighbor_value = &map.grid[[neighbor_x, neighbor_y]];
-                            if *neighbor_value == BlockType::Hookable {
+                            if *neighbor_value == TileTag::Hookable {
                                 edge_bug[[x, y]] = true;
                                 // break;
                                 // TODO: this should be easy to optimize
@@ -49,7 +49,7 @@ pub fn fix_edge_bugs(map: &mut Map) -> Result<(), &'static str> {
                 }
 
                 if edge_bug[[x, y]] {
-                    map.grid[[x, y]] = BlockType::Freeze;
+                    map.grid[[x, y]] = TileTag::Freeze;
                 }
             }
         }
@@ -61,7 +61,7 @@ pub fn fix_edge_bugs(map: &mut Map) -> Result<(), &'static str> {
 /// Using a distance transform this function will fill up all empty blocks that are too far
 /// from the next solid/non-empty block
 pub fn fill_open_areas(map: &mut Map, max_distance: f32) -> Array2<f32> {
-    let grid = map.grid.map(|val| *val != BlockType::Empty);
+    let grid = map.grid.map(|val| *val != TileTag::Empty);
 
     // euclidean distance transform
     let distance = dt_bool::<f32>(&grid.into_dyn())
@@ -70,14 +70,14 @@ pub fn fill_open_areas(map: &mut Map, max_distance: f32) -> Array2<f32> {
 
     map.grid.zip_mut_with(&distance, |block_type, distance| {
         // only modify empty blocks
-        if *block_type != BlockType::Empty {
+        if *block_type != TileTag::Empty {
             return;
         }
 
         if *distance > max_distance + SQRT_2 {
-            *block_type = BlockType::Hookable;
+            *block_type = TileTag::Hookable;
         } else if *distance > max_distance {
-            *block_type = BlockType::Freeze;
+            *block_type = TileTag::Freeze;
         }
     });
 
@@ -100,7 +100,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Vector2, Direction)>, &'static str
                 window_y - window_size..=window_y + window_size
             ]);
 
-            if window[[2, 2]] != BlockType::Empty {
+            if window[[2, 2]] != TileTag::Empty {
                 continue;
             }
 
@@ -198,7 +198,7 @@ pub fn find_corners(map: &Map) -> Result<Vec<(Vector2, Direction)>, &'static str
             for (shape, dir) in shapes {
                 if shape
                     .iter()
-                    .all(|block_type: &&BlockType| is_freeze(**block_type))
+                    .all(|block_type: &&TileTag| is_freeze(**block_type))
                 {
                     candidates.push((Vector2::new(window_x, window_y), dir));
                 }
@@ -236,16 +236,16 @@ pub fn check_corner_skip(
 
         stage = match (stage, curr_block_type) {
             // proceed to / or stay in stage 1 if freeze is found
-            (0 | 1, BlockType::Freeze) => 1,
+            (0 | 1, TileTag::Freeze) => 1,
 
             // proceed to / or stay in stage 2 if hookable is found
-            (1 | 2, BlockType::Hookable) => 2,
+            (1 | 2, TileTag::Hookable) => 2,
 
             // proceed to / or stay in stage 2 if freeze is found
-            (2 | 3, BlockType::Freeze) => 3,
+            (2 | 3, TileTag::Freeze) => 3,
 
             // proceed to final state if (first) empty block is found
-            (3, BlockType::Empty) => 4,
+            (3, TileTag::Empty) => 4,
 
             // no match -> invalid sequence, abort!
             _ => return None,
@@ -287,12 +287,12 @@ pub fn count_skip_neighbours(
             let bot_count = map.count_occurence_in_area(
                 top_left.shifted_by(0, offset)?,
                 bot_right.shifted_by(0, offset)?,
-                BlockType::Hookable,
+                TileTag::Hookable,
             )?;
             let top_count = map.count_occurence_in_area(
                 top_left.shifted_by(0, -offset)?,
                 bot_right.shifted_by(0, -offset)?,
-                BlockType::Hookable,
+                TileTag::Hookable,
             )?;
 
             Ok(usize::min(bot_count, top_count))
@@ -301,12 +301,12 @@ pub fn count_skip_neighbours(
             let left_count = map.count_occurence_in_area(
                 top_left.shifted_by(-offset, 0)?,
                 bot_right.shifted_by(-offset, 0)?,
-                BlockType::Hookable,
+                TileTag::Hookable,
             )?;
             let right_count = map.count_occurence_in_area(
                 top_left.shifted_by(offset, 0)?,
                 bot_right.shifted_by(offset, 0)?,
-                BlockType::Hookable,
+                TileTag::Hookable,
             )?;
 
             Ok(usize::min(left_count, right_count))
@@ -317,7 +317,7 @@ pub fn count_skip_neighbours(
 pub fn generate_skip(
     map: &mut Map,
     skip: &Skip,
-    block_type: BlockType,
+    block_type: TileTag,
 ) -> Result<(), &'static str> {
     let top_left = Vector2::new(
         usize::min(skip.start_pos.x, skip.end_pos.x),
@@ -345,13 +345,13 @@ pub fn generate_skip(
             map.set_area(
                 top_left.shifted_by(0, -1)?,
                 bot_right.shifted_by(0, -1)?,
-                BlockType::Freeze,
+                TileTag::Freeze,
                 Overwrite::ReplaceSolidOnly,
             );
             map.set_area(
                 top_left.shifted_by(0, 1)?,
                 bot_right.shifted_by(0, 1)?,
-                BlockType::Freeze,
+                TileTag::Freeze,
                 Overwrite::ReplaceSolidOnly,
             );
         }
@@ -359,13 +359,13 @@ pub fn generate_skip(
             map.set_area(
                 top_left.shifted_by(-1, 0)?,
                 bot_right.shifted_by(-1, 0)?,
-                BlockType::Freeze,
+                TileTag::Freeze,
                 Overwrite::ReplaceSolidOnly,
             );
             map.set_area(
                 top_left.shifted_by(1, 0)?,
                 bot_right.shifted_by(1, 0)?,
-                BlockType::Freeze,
+                TileTag::Freeze,
                 Overwrite::ReplaceSolidOnly,
             );
         }
@@ -441,9 +441,9 @@ pub fn generate_all_skips(
     // generate all remaining valid skips
     for skip_index in 0..skips.len() {
         match valid_skips[skip_index] {
-            SkipStatus::Valid => generate_skip(map, &skips[skip_index], BlockType::Empty)?,
+            SkipStatus::Valid => generate_skip(map, &skips[skip_index], TileTag::Empty)?,
             SkipStatus::ValidFreezeSkipOnly => {
-                generate_skip(map, &skips[skip_index], BlockType::Freeze)?
+                generate_skip(map, &skips[skip_index], TileTag::Freeze)?
             }
             _ => {}
         }
@@ -489,12 +489,12 @@ pub fn remove_freeze_blobs(map: &mut Map, min_freeze_size: usize) {
                 // TODO: In theory this should be a nice speedup, but in pracise i should replace this with a
                 // much better two sweep approach. Idea: Do a post processing step which detects
                 // 'wall'-freezes. this information can then be used in various other steps.
-                BlockType::Hookable => {
+                TileTag::Hookable => {
                     invalid
                         .slice_mut(s![x - 1..=x + 1, y - 1..=y + 1])
                         .fill(Some(true));
                 }
-                BlockType::Freeze => {}
+                TileTag::Freeze => {}
                 // skip if not a freeze block
                 _ => continue,
             }
@@ -579,7 +579,7 @@ pub fn remove_freeze_blobs(map: &mut Map, min_freeze_size: usize) {
                 for visited_pos in blob_visited {
                     // remove small blobs
                     if blob_size < min_freeze_size {
-                        map.grid[visited_pos.as_index()] = BlockType::Empty;
+                        map.grid[visited_pos.as_index()] = TileTag::Empty;
                     }
                 }
             }
