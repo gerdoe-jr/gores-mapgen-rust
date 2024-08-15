@@ -2,7 +2,7 @@ use std::{collections::HashMap, env};
 
 use mapgen_core::{
     generator::Generator,
-    kernel::Kernel,
+    brush::Brush,
     map::{TileTag, Map},
     random::{random_seed, Random, Seed},
     walker::Walker,
@@ -217,7 +217,7 @@ impl Editor {
 
         let prng = Random::new(random_seed());
 
-        let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal.clone());
+        let mut walker = Walker::new(Brush::new(5, 0.0), Brush::new(7, 0.0), prng, wal.clone());
 
         walker.set_waypoints(way.clone());
 

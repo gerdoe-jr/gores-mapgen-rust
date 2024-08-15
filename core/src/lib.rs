@@ -1,5 +1,5 @@
 pub mod generator;
-pub mod kernel;
+pub mod brush;
 pub mod map;
 pub mod position;
 pub mod post_processing;

@@ -7,7 +7,7 @@ use std::{
 
 use mapgen_core::{
     generator::{Generator, GeneratorParams},
-    kernel::Kernel,
+    brush::Brush,
     map::Map,
     random::{random_seed, Random, Seed},
     walker::{NormalWaypoints, Walker, WalkerParams},
@@ -130,7 +130,7 @@ impl ServerBridge {
 
         let prng = Random::new(random_seed());
 
-        let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal.clone());
+        let mut walker = Walker::new(Brush::new(5, 0.0), Brush::new(7, 0.0), prng, wal.clone());
 
         walker.set_waypoints(way.clone()).set_bounds(500, 500);
 

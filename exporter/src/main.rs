@@ -4,7 +4,7 @@ use clap::{command, crate_version, Parser};
 use exporter::{Exporter, ExporterConfig};
 use mapgen_core::{
     generator::{Generator, GeneratorParams},
-    kernel::Kernel,
+    brush::Brush,
     map::{TileTag, Map},
     random::Random,
     walker::{NormalWaypoints, Walker, WalkerParams},
@@ -94,7 +94,7 @@ fn main() {
 
             let prng = Random::new(args.seed);
 
-            let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal);
+            let mut walker = Walker::new(Brush::new(5, 0.0), Brush::new(7, 0.0), prng, wal);
 
             walker
                 .set_waypoints(way.clone())

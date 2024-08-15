@@ -7,7 +7,7 @@ use std::{
 
 use mapgen_core::{
     generator::{Generator, GeneratorParams},
-    kernel::Kernel,
+    brush::Brush,
     map::{TileTag, Map},
     random::{random_seed, Random},
     walker::{NormalWaypoints, Walker, WalkerParams},
@@ -33,7 +33,7 @@ fn main() {
 
     let prng = Random::new(random_seed());
 
-    let mut walker = Walker::new(Kernel::new(5, 0.0), Kernel::new(7, 0.0), prng, wal.clone());
+    let mut walker = Walker::new(Brush::new(5, 0.0), Brush::new(7, 0.0), prng, wal.clone());
 
     walker.set_waypoints(way).set_bounds(300, 150);
 

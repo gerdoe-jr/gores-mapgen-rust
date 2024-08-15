@@ -128,4 +128,12 @@ impl Vector2 {
 
         shifts
     }
+
+    pub fn dot(&self) -> f32 {
+        ((self.x.pow(2) + self.y.pow(2)) as f32).sqrt()
+    }
+
+    pub fn distance(&self, rhs: &Vector2) -> f32 {
+        (((self.x - rhs.x).pow(2) + (self.y - rhs.y).pow(2)) as f32).sqrt()
+    }
 }
