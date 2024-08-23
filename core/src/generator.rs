@@ -40,12 +40,6 @@ pub fn generate_room(
     platform_margin: i32,
     zone_type: Option<TileTag>,
 ) -> Result<(), &'static str> {
-    if !map.pos_in_bounds(&pos.shifted_by(room_size + 2, room_size + 1)?)
-        || !map.pos_in_bounds(&pos.shifted_by(room_size + 1, room_size + 1)?)
-    {
-        return Err("generate room out of bounds");
-    }
-
     // carve room
     map.set_area_border(
         pos.shifted_by(-room_size, -room_size)?,

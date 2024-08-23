@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{brush::Brush, position::Vector2};
 use ndarray::{s, Array2};
-use twmap::{AnyTile, GameTile, Layer, LayerKind, Speedup, Switch, Tele, TileFlags, TilemapLayer, Tune, TwMap, Version};
+use twmap::{edit::EditTile, AnyTile, GameTile, Layer, LayerKind, Speedup, Switch, Tele, TileFlags, TilemapLayer, Tune, TwMap, Version};
 
 // TileTag::Empty | TileTag::EmptyReserved => 0,
 // TileTag::Hookable | TileTag::Platform => 1,
@@ -90,6 +90,7 @@ impl Map {
             }
         });
     }
+    
 
     pub fn fill_switch(&mut self, tile: Switch) {
         self.raw.physics_group_mut().layers.iter_mut().map(|layer| {
@@ -121,6 +122,14 @@ impl Map {
                 layer.tiles.unwrap_mut().fill(tile);
             }
         });
+    }
+
+    pub fn __fill_layer(&mut self, kind: LayerKind, tile: impl AnyTile) {
+        self.raw.edit_tiles();
+    }
+
+    pub fn fill_layer<T: AnyTile, L: TilemapLayer<TileType=T>>(&mut self, layer: &mut L, tile: T) {
+        layer.tiles_mut().unwrap_mut().fill(tile)
     }
 
     pub fn set_tile_game(&mut self, pos: Vector2, tile: GameTile) {
@@ -162,96 +171,18 @@ impl Map {
             }
         });
     }
-
-    pub fn check_area_exists(
-        &self,
-        top_left: Vector2,
-        bot_right: Vector2,
-        kind: LayerKind,
-        tile: impl AnyTile,
-    ) -> Result<bool, &'static str> {
-        let area = self
-            .grid
-            .slice(s![top_left.x..=bot_right.x, top_left.y..=bot_right.y]);
-
-        Ok(area.iter().any(|&block| block == value))
-    }
-
-    pub fn check_area_all(
-        &self,
-        top_left: Vector2,
-        bot_right: Vector2,
-        kind: LayerKind,
-        tile: impl AnyTile,
-    ) -> Result<bool, &'static str> {
-        if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
-            return Err("checking area out of bounds");
-        }
-        let area = self
-            .grid
-            .slice(s![top_left.x..=bot_right.x, top_left.y..=bot_right.y]);
-
-        Ok(area.iter().all(|&block| block == value))
-    }
-
-    pub fn count_occurence_in_area(
-        &self,
-        top_left: Vector2,
-        bot_right: Vector2,
-        kind: LayerKind,
-        tile: impl AnyTile,
-    ) -> Result<usize, &'static str> {
-        if !self.pos_in_bounds(&top_left) || !self.pos_in_bounds(&bot_right) {
-            return Err("checking area out of bounds");
-        }
-        let area = self
-            .grid
-            .slice(s![top_left.x..=bot_right.x, top_left.y..=bot_right.y]);
-
-        Ok(area.iter().filter(|&&block| block == value).count())
-    }
-
-    pub fn set_area(
-        &mut self,
-        top_left: Vector2,
-        bot_right: Vector2,
-        kind: LayerKind,
-        tile: impl AnyTile,
-    ) {
-        // don't check if in bounds, user should check it theirselves
-
-        let mut view = self
-            .grid
-            .slice_mut(s![top_left.x..=bot_right.x, top_left.y..=bot_right.y]);
-
-        for current_value in view.iter_mut() {
-            *current_value = value;
-        }
-    }
-
-    /// sets the outline of an area define by two positions
-    pub fn set_area_border(
-        &mut self,
-        top_left: Vector2,
-        bot_right: Vector2,
-        kind: LayerKind,
-        tile: impl AnyTile,
-    ) {
-        let top_right = Vector2::new(bot_right.x, top_left.y);
-        let bot_left = Vector2::new(top_left.x, bot_right.y);
-
-        for x in top_left.x..=bot_right.x {
-            self.
-        }
-
-        self.set_area(top_left, top_right, value, overwrite);
-        self.set_area(top_right, bot_right, value, overwrite);
-        self.set_area(top_left, bot_left, value, overwrite);
-        self.set_area(bot_left, bot_right, value, overwrite);
-    }
 }
 
-pub trait MapElement {
-    fn apply(&mut self, pos: Vector2, map: &mut Map, kind: LayerKind) -> bool;
-    fn apply_destructable(&mut self, pos: Vector2, map: &mut Map, kind: LayerKind) -> bool;
+struct TwMapEditFillLayer;
+
+impl EditTile for TwMapEditFillLayer {
+    fn game_tile(_tile: &mut GameTile) {}
+
+    fn tele(_tele: &mut Tele) {}
+
+    fn speedup(_speedup: &mut Speedup) {}
+
+    fn switch(_switch: &mut Switch) {}
+
+    fn tune(_tune: &mut Tune) {}
 }

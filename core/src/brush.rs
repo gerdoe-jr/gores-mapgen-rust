@@ -1,7 +1,10 @@
 use ndarray::Array2;
-use twmap::LayerKind;
+use twmap::{AnyTile, LayerKind};
 
-use crate::{map::{Map, MapElement}, position::Vector2};
+use crate::{
+    map::{Map, MapElement},
+    position::Vector2,
+};
 
 #[derive(Clone)]
 pub struct Brush {
@@ -31,25 +34,20 @@ impl Brush {
 
         Self { texture }
     }
-}
 
-impl MapElement for Brush {
-    fn apply(&mut self, pos: Vector2, map: &mut Map, kind: LayerKind) -> bool {
+    pub fn apply<T: AnyTile>(&self, tiles: &mut Array2<T>, pos: Vector2, tile: T) {
         let (width, height) = self.texture.dim();
-        let (offx, offy) = ((width as f32 / 2.0) as usize, (height as f32 / 2.0) as usize);
+        let (offx, offy) = (
+            (width as f32 / 2.0) as usize,
+            (height as f32 / 2.0) as usize,
+        );
 
         let top_left = Vector2::new(pos.x - offx, pos.y - offy);
         for ((x, y), &not_empty) in self.texture.indexed_iter() {
             let real_pos = Vector2::new(top_left.x + x, top_left.y + y);
             if not_empty {
-                // set tile, but how?
+                tiles[real_pos.as_index()] = tile;
             }
         }
-
-        return true;
-    }
-    
-    fn apply_destructable(&mut self, pos: Vector2, map: &mut Map, kind: twmap::LayerKind) -> bool {
-        todo!()
     }
 }
