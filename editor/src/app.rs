@@ -24,7 +24,6 @@ use crate::components::{
 };
 
 pub struct WgpuContext<'w> {
-    pub adapter: Adapter,
     pub device: Device,
     pub queue: Queue,
     pub surface: Surface<'w>,
@@ -102,7 +101,6 @@ impl<'w> App<'w> {
         surface.configure(&device, &config);
 
         let wgpu_context = WgpuContext {
-            adapter,
             device,
             queue,
             surface,
