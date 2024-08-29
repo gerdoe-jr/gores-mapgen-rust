@@ -2,7 +2,7 @@ use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::app::{RenderContext, WgpuContext};
 
-pub mod egui;
+pub mod ui;
 pub mod map;
 
 pub trait AppComponent {
