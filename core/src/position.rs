@@ -1,16 +1,6 @@
-use crate::map::Map;
-use std::usize;
+use std::f32::consts::PI;
 
-// using my own position vector to meet ndarray's indexing standard using usize
-//
-// while glam has nice performance benefits, the amount of expensive operations
-// on the position vector will be very limited, so this should be fine..
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Vector2 {
-    pub x: usize,
-    pub y: usize,
-}
+use ndarray::{Array1, ArrayView1};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -22,118 +12,147 @@ pub enum Direction {
     Left = 3,
 }
 
-impl Vector2 {
-    pub fn new(x: usize, y: usize) -> Vector2 {
-        Vector2 { x, y }
-    }
-
-    pub fn as_index(&self) -> [usize; 2] {
-        [self.x, self.y]
-    }
-
-    /// returns a new position shifted by some x and y value
-    pub fn shifted_by(&self, x_shift: i32, y_shift: i32) -> Result<Vector2, &'static str> {
-        let new_x = match x_shift >= 0 {
-            true => self.x + (x_shift as usize),
-            false => self
-                .x
-                .checked_sub((-x_shift) as usize)
-                .ok_or("invalid shift")?,
-        };
-
-        let new_y = match y_shift >= 0 {
-            true => self.y + y_shift as usize,
-            false => self
-                .y
-                .checked_sub((-y_shift) as usize)
-                .ok_or("invalid shift")?,
-        };
-
-        Ok(Vector2::new(new_x, new_y))
-    }
-
-    pub fn shift_in_direction(
-        &mut self,
-        shift: Direction,
-        map: &Map,
-    ) -> bool {
-        if !self.is_shift_valid(shift, map) {
-            return false;
-        }
-
-        match shift {
-            Direction::Up => self.y -= 1,
-            Direction::Right => self.x += 1,
-            Direction::Down => self.y += 1,
-            Direction::Left => self.x -= 1,
-        }
-
-        return true;
-    }
-
-    pub fn is_shift_valid(&self, shift: Direction, map: &Map) -> bool {
-        match shift {
-            Direction::Up => self.y > 0,
-            Direction::Right => self.x < map.width() - 1,
-            Direction::Down => self.y < map.height() - 1,
-            Direction::Left => self.x > 0,
+impl Direction {
+    pub fn prev(&self) -> Self {
+        match &self {
+            Self::Up => Self::Left,
+            Self::Right => Self::Up,
+            Self::Down => Self::Right,
+            Self::Left => Self::Down,
         }
     }
 
-    pub fn get_greedy_shift(&self, goal: &Vector2) -> Direction {
-        let x_diff = goal.x as isize - self.x as isize;
-        let x_abs_diff = x_diff.abs();
-        let y_diff = goal.y as isize - self.y as isize;
-        let y_abs_diff = y_diff.abs();
-
-        // check whether x or y is dominant
-        if x_abs_diff > y_abs_diff {
-            if x_diff.is_positive() {
-                Direction::Right
-            } else {
-                Direction::Left
-            }
-        } else if y_diff.is_positive() {
-            Direction::Down
-        } else {
-            Direction::Up
+    pub fn next(&self) -> Self {
+        match &self {
+            Self::Up => Self::Right,
+            Self::Right => Self::Down,
+            Self::Down => Self::Left,
+            Self::Left => Self::Up,
         }
     }
 
-    /// squared euclidean distance between two Positions
-    pub fn distance_squared(&self, rhs: Vector2) -> usize {
-        self.x.abs_diff(rhs.x).saturating_pow(2) + self.y.abs_diff(rhs.y).saturating_pow(2)
+    pub fn backwards(&self) -> Self {
+        self.next().next()
+    }
+}
+
+impl From<usize> for Direction {
+    fn from(id: usize) -> Direction {
+        match id {
+            0 => Self::Up,
+            1 => Self::Right,
+            2 => Self::Down,
+            3 => Self::Left,
+            _ => Default::default(),
+        }
+    }
+}
+
+pub type Vector2 = Array1<f32>;
+pub type VectorView2<'a> = ArrayView1<'a, f32>;
+
+#[inline]
+pub fn get_x(value: VectorView2) -> f32 {
+    value[[0]]
+}
+
+#[inline]
+pub fn get_y(value: VectorView2) -> f32 {
+    value[[1]]
+}
+
+#[inline]
+pub fn as_index(value: VectorView2) -> [usize; 2] {
+    [value[[0]] as usize, value[[1]] as usize]
+}
+
+pub fn from_raw(value: (f32, f32), scale_factor: f32) -> Vector2 {
+    Vector2::from(vec![(value.0 * scale_factor), (value.1 * scale_factor)])
+}
+
+pub fn euclidian(lhs: VectorView2, rhs: VectorView2) -> f32 {
+    let x = lhs[[0]] - rhs[[0]];
+    let y = lhs[[1]] - rhs[[1]];
+
+    length(Vector2::from(vec![x, y]).view())
+}
+
+#[inline]
+pub fn manhattan(x: VectorView2) -> f32 {
+    x.fold(0., |acc, elem| acc + elem)
+}
+
+#[inline]
+pub fn length(value: VectorView2) -> f32 {
+    (value[[0]].powi(2) + value[[1]].powi(2)).sqrt()
+}
+
+#[inline]
+pub fn normalize(mut value: Vector2) -> Vector2 {
+    let len = length(value.view());
+    value.mapv_inplace(|e| e / len);
+
+    value
+}
+
+#[inline]
+pub fn angle(value: VectorView2) -> f32 {
+    f32::atan2(value[[0]], value[[1]])
+}
+
+pub fn angle_direction(angle: f32) -> Direction {
+    let angle = (angle + 2.0 * PI + PI / 2.0) % (PI * 2.0);
+
+    if (0.0..=PI / 2.0).contains(&angle) {
+        Direction::Right
+    } else if (PI / 2.0..=PI).contains(&angle) {
+        Direction::Up
+    } else if (PI..=3.0 * PI / 2.0).contains(&angle) {
+        Direction::Left
+    } else if (3.0 * PI / 2.0..=2.0 * PI).contains(&angle) {
+        Direction::Down
+    } else {
+        panic!()
+    }
+}
+
+#[inline]
+pub fn direction(value: VectorView2) -> Direction {
+    angle_direction(angle(value))
+}
+
+pub fn shift_by_direction(value: &mut Vector2, shift: f32, direction: Direction) {
+    match direction {
+        Direction::Up => value[[1]] -= shift,
+        Direction::Right => value[[0]] += shift,
+        Direction::Down => value[[1]] += shift,
+        Direction::Left => value[[0]] -= shift,
+    }
+}
+
+pub fn straight_neighbors(pos: VectorView2) -> Vec<Vector2> {
+    let cur = pos.to_vec();
+    let mut neighbors: Vec<Vector2> = vec![
+        cur.clone().into(),
+        cur.clone().into(),
+        cur.clone().into(),
+        cur.into(),
+    ];
+    for i in 0..4 {
+        shift_by_direction(&mut neighbors[i], 1.0, Direction::from(i));
     }
 
-    /// returns a Vec with all possible shifts, sorted by how close they get
-    /// towards the goal position
-    pub fn get_rated_shifts(&self, goal: Vector2, map: &Map) -> [Direction; 4] {
-        let mut shifts = [
-            Direction::Left,
-            Direction::Up,
-            Direction::Right,
-            Direction::Down,
-        ];
+    neighbors
+}
 
-        shifts.sort_by_cached_key(|&shift| {
-            let mut shifted_pos = self.clone();
-            if shifted_pos.shift_in_direction(shift, map) {
-                shifted_pos.distance_squared(goal)
-            } else {
-                // assign maximum distance to invalid shifts
-                // TODO: i could also return a vec and completly remove invalid moves?
-                usize::MAX
-            }
-        });
+pub fn all_neighbors(pos: VectorView2) -> Vec<Vector2> {
+    let mut neighbors = straight_neighbors(pos);
 
-        shifts
+    neighbors.extend(straight_neighbors(pos));
+
+    for i in 0..4 {
+        shift_by_direction(&mut neighbors[i + 4], 1.0, Direction::from(i).next());
     }
 
-    pub fn dot(&self) -> f32 {
-        ((self.x.pow(2) + self.y.pow(2)) as f32).sqrt()
-    }
-
-    pub fn distance(&self, rhs: &Vector2) -> f32 {
-        (((self.x - rhs.x).pow(2) + (self.y - rhs.y).pow(2)) as f32).sqrt()
-    }
+    neighbors
 }

@@ -4,23 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rand_distr = "0.4.3"
+raw-window-handle = "0.6"
+winit = "0.29"
 
-serde = "1.0.197"
-serde_json = "1.0.115"
+egui = "0.26"
+egui-wgpu = { version = "0.26", features = ["winit"] }
+egui-winit = "0.26"
 
-egui = "0.21.0"
-egui_struct = { version = "0.4", default-features = false, features = [ "egui21" ] }
-egui-miniquad = "0.14.0"
-egui-macroquad = "0.15.0"
-macroquad = "0.3.25"
-tinyfiledialogs = "3.9.1"
+vek = { version = "0.16.1", default-features = false, features = ["bytemuck", "az", "rgba", "std", "uv"] }
+twmap = "0.12"
+wgpu = "0.19"
+twgpu = "0.3"
+image = "0.24.1"
 
-log = "0.4.21"
-simple_logger = "5.0.0"
+futures = "0.3.21"
+pollster = "0.3"
 
-ndarray = "0.15.6"
-twmap = "0.12.0"
-
-mapgen_core = { package = "core", path = "../core", features = [ "serde" ] }
-mapgen_exporter = { package = "exporter", path = "../exporter" }
+mapgen_core = { package = "core", path = "../core" }

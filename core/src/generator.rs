@@ -1,98 +1,87 @@
+use twmap::{GameTile, TileFlags, TwMap};
+
 use crate::{
-    map::{Map}, position::Vector2, random::{Random, Seed}, walker::Walker
+    brush::Brush,
+    map::Map,
+    position::{from_raw, shift_by_direction},
+    walker::Walker,
 };
 
 pub struct Generator {
-    pub walker: Walker,
-    pub map: Map,
+    walker: Walker,
+    brush: Brush,
+    before_step: Option<Box<dyn FnMut(&mut Walker, &mut Map, &mut Brush)>>,
 }
 
 impl Generator {
-    pub fn new(seed: Seed, map: Map) -> Generator {
-        Generator {
-            walker: Walker::new(Random::new(seed)),
-            map,
+    pub fn new(scale_factor: f32) -> Self {
+        Self {
+            walker: Walker::new(scale_factor),
+            brush: Brush::new(),
+            before_step: None,
         }
     }
 
-    pub fn reshape(&mut self, width: usize, height: usize) {
-        self.map.reshape(width, height);
-        self.walker.set_bounds(width, height);
+    pub fn on_step(&mut self, func: impl FnMut(&mut Walker, &mut Map, &mut Brush) + 'static) {
+        self.before_step = Some(Box::new(func));
     }
 
-    pub fn step(&mut self) -> bool {
-        self.walker.step(&mut self.map)
-    }
+    pub fn generate(&mut self, waypoints: Vec<(f32, f32)>) -> TwMap {
+        // prepare canvas
+        let mut map = Map::new();
 
-    pub fn finalize(&mut self) {
-        while !self.step() {
-            break;
+        let scale_factor = self.walker.get_scale_factor();
+
+        // 1. calculate bounds and enlarge them to let walker freely... walk
+        let mut freaky_waypoints = waypoints.clone();
+
+        freaky_waypoints.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        let normal_width = freaky_waypoints.last().unwrap().0 - freaky_waypoints.first().unwrap().0;
+
+        freaky_waypoints.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        let normal_height =
+            freaky_waypoints.last().unwrap().1 - freaky_waypoints.first().unwrap().1;
+
+        let approx_width = normal_width * scale_factor;
+        let approx_height = normal_height * scale_factor;
+
+        // 2. create map with enlarged bounds
+        map.reshape(approx_width as usize + 400, approx_height as usize + 400);
+        map.fill_game(GameTile::new(1, TileFlags::empty()));
+
+        // 3. setup initial position
+        let mut current_pos = from_raw(waypoints[0], scale_factor);
+        current_pos[[0]] += 200.0;
+        current_pos[[1]] += 200.0;
+
+        self.walker.set_waypoints(waypoints);
+
+        if let Some(ref mut on_step) = &mut self.before_step {
+            on_step(&mut self.walker, &mut map, &mut self.brush);
         }
 
-        self.walker.reset();
-    }
-}
-
-pub fn generate_room(
-    map: &mut Map,
-    pos: Vector2,
-    room_size: i32,
-    platform_margin: i32,
-    zone_type: Option<TileTag>,
-) -> Result<(), &'static str> {
-    // carve room
-    map.set_area_border(
-        pos.shifted_by(-room_size, -room_size)?,
-        pos.shifted_by(room_size, room_size)?,
-        TileTag::Empty,
-        Overwrite::Force,
-    );
-
-    // only reserve - 1 so that when this is used for platforms
-    map.set_area(
-        pos.shifted_by(-room_size + 1, -room_size + 1)?,
-        pos.shifted_by(room_size - 1, room_size - 1)?,
-        TileTag::EmptyReserved,
-        Overwrite::Force,
-    );
-
-    match zone_type {
-        Some(zone_type) => {
-            // set start/finish line
-            map.set_area_border(
-                pos.shifted_by(-room_size - 1, -room_size - 1)?,
-                pos.shifted_by(room_size + 1, room_size + 1)?,
-                zone_type,
-                Overwrite::ReplaceNonSolidForce,
-            );
-
-            // set spawns
-            if zone_type == TileTag::Start {
-                map.set_area(
-                    pos.shifted_by(-(room_size - platform_margin), room_size - 1)?,
-                    pos.shifted_by(room_size - platform_margin, room_size - 1)?,
-                    TileTag::Spawn,
-                    Overwrite::Force,
-                );
-
-                map.set_area(
-                    pos.shifted_by(-(room_size - platform_margin), room_size + 1)?,
-                    pos.shifted_by(room_size - platform_margin, room_size + 1)?,
-                    TileTag::Platform,
-                    Overwrite::Force,
-                );
+        // loop thru generation
+        while self.walker.step(current_pos.view()) != 0 {
+            if let Some(ref mut on_step) = &mut self.before_step {
+                on_step(&mut self.walker, &mut map, &mut self.brush);
             }
-        }
-        None => {
-            // for non start/finish rooms -> place center platform
-            map.set_area(
-                pos.shifted_by(-(room_size - platform_margin), room_size - 3)?,
-                pos.shifted_by(room_size - platform_margin, room_size - 3)?,
-                TileTag::Platform,
-                Overwrite::Force,
+
+            shift_by_direction(&mut current_pos, 1.0, self.walker.current_state().direction);
+
+            self.brush.apply(
+                map.game_layer().tiles.unwrap_mut(),
+                current_pos.clone(),
+                GameTile::new(0, TileFlags::empty()),
             );
         }
-    }
 
-    Ok(())
+        // reset our tools
+        self.walker.reset();
+        self.brush = Brush::new();
+
+        // shrink map
+        map.finalize()
+    }
 }
