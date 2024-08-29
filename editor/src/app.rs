@@ -158,10 +158,10 @@ impl<'w> App<'w> {
 
                             for component in self.components.iter() {
                                 command_encoders.insert(
-                                    component.label().unwrap(),
+                                    component.label(),
                                     self.wgpu_context.device.create_command_encoder(
                                         &CommandEncoderDescriptor {
-                                            label: component.label(),
+                                            label: Some(component.label()),
                                         },
                                     ),
                                 );
@@ -189,7 +189,7 @@ impl<'w> App<'w> {
                                     .as_mut()
                                     .unwrap()
                                     .command_encoders
-                                    .remove(component.label().unwrap())
+                                    .remove(component.label())
                                     .unwrap();
 
                                 self.wgpu_context

@@ -41,8 +41,8 @@ impl UiComponent {
 }
 
 impl AppComponent for UiComponent {
-    fn label(&self) -> Option<&'static str> {
-        Some("ui_component")
+    fn label(&self) -> &'static str {
+        "ui_component"
     }
     fn on_user_input(&mut self, window: &Window, event: &WindowEvent) -> bool {
         let _ = self.state.on_window_event(window, event);
@@ -64,7 +64,7 @@ impl AppComponent for UiComponent {
 
             let command_encoder = render_context
                 .command_encoders
-                .get_mut(self.label().unwrap())
+                .get_mut(self.label())
                 .unwrap();
 
             self.state
@@ -115,7 +115,7 @@ impl AppComponent for UiComponent {
                         })],
                         depth_stencil_attachment: None,
                         timestamp_writes: None,
-                        label: self.label(),
+                        label: Some(self.label()),
                         occlusion_query_set: None,
                     });
                 self.renderer

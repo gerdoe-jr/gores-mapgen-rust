@@ -2,12 +2,12 @@ use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::app::{RenderContext, WgpuContext};
 
-pub mod ui;
 pub mod map;
+pub mod ui;
 
 pub trait AppComponent {
-    fn label(&self) -> Option<&'static str> {
-        None
+    fn label(&self) -> &'static str {
+        "no label"
     }
 
     fn on_user_input(&mut self, window: &Window, event: &WindowEvent) -> bool;

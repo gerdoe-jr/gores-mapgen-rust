@@ -135,8 +135,8 @@ impl TwGpuComponent {
 }
 
 impl AppComponent for TwGpuComponent {
-    fn label(&self) -> Option<&'static str> {
-        Some("twgpu_component")
+    fn label(&self) -> &'static str {
+        "twgpu_component"
     }
     fn on_user_input(&mut self, _window: &Window, event: &WindowEvent) -> bool {
         match *event {
@@ -213,10 +213,10 @@ impl AppComponent for TwGpuComponent {
 
             let render_pass = context
                 .command_encoders
-                .get_mut(self.label().unwrap())
+                .get_mut(self.label())
                 .unwrap()
                 .begin_render_pass(&RenderPassDescriptor {
-                    label: self.label(),
+                    label: Some(self.label()),
                     color_attachments: &[Some(RenderPassColorAttachment {
                         view: &frame_view,
                         resolve_target: None,
