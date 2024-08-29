@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use egui::{ahash::HashMap, Context};
+use egui::ahash::HashMap;
 use egui_wgpu::wgpu::{
     self, InstanceDescriptor, PowerPreference, RequestAdapterOptions, TextureFormat,
 };
@@ -37,7 +37,7 @@ pub struct RenderContext {
     pub surface_view: TextureView,
 }
 
-pub struct App<'w, F: FnMut(&Context)> {
+pub struct App<'w> {
     window: Arc<Window>,
     event_loop: EventLoop<()>,
 
@@ -45,13 +45,11 @@ pub struct App<'w, F: FnMut(&Context)> {
 
     // components: Vec<Box<dyn AppComponent>>,
     twgpu: TwGpuComponent,
-    egui: UiComponent<F>,
-
-    ui_context: UiContext,
+    egui: UiComponent,
 }
 
-impl<'w, F: FnMut(&Context)> App<'w, F> {
-    pub async fn new(width: u32, height: u32, run_ui: F) -> Self {
+impl<'w> App<'w> {
+    pub async fn new(width: u32, height: u32) -> Self {
         let event_loop = EventLoop::new().unwrap();
         let window = Arc::new(
             winit::window::WindowBuilder::new()
@@ -116,10 +114,10 @@ impl<'w, F: FnMut(&Context)> App<'w, F> {
 
         let mut ui_context = UiContext::new();
 
-        ui_context.add_renderable(LeftPanelUi);
+        ui_context.add_renderable(LeftPanelUi::new());
 
         let twgpu = TwGpuComponent::new(width, height, &wgpu_context);
-        let egui = UiComponent::new(run_ui, &window, &wgpu_context);
+        let egui = UiComponent::new(ui_context, &window, &wgpu_context);
 
         Self {
             window,
@@ -128,8 +126,6 @@ impl<'w, F: FnMut(&Context)> App<'w, F> {
 
             twgpu,
             egui,
-
-            ui_context,
         }
     }
 

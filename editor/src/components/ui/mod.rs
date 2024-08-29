@@ -1,25 +1,26 @@
 pub mod context;
 pub mod left_panel;
 
+use context::UiContext;
 use egui::Context;
 use egui_wgpu::{Renderer, ScreenDescriptor};
 use egui_winit::State;
-use wgpu::{CommandEncoder, StoreOp, TextureView};
+use wgpu::StoreOp;
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::app::{RenderContext, WgpuContext};
 
 use super::AppComponent;
 
-pub struct UiComponent<F: FnMut(&Context)> {
+pub struct UiComponent {
     state: State,
     renderer: Renderer,
 
-    run_ui: F,
+    context: UiContext,
 }
 
-impl<F: FnMut(&Context)> UiComponent<F> {
-    pub fn new(run_ui: F, window: &Window, wgpu_context: &WgpuContext) -> Self {
+impl UiComponent {
+    pub fn new(context: UiContext, window: &Window, wgpu_context: &WgpuContext) -> Self {
         let egui_context = Context::default();
 
         let state = egui_winit::State::new(
@@ -34,7 +35,7 @@ impl<F: FnMut(&Context)> UiComponent<F> {
         Self {
             state,
             renderer,
-            run_ui,
+            context
         }
     }
 
@@ -43,7 +44,7 @@ impl<F: FnMut(&Context)> UiComponent<F> {
     }
 }
 
-impl<F: FnMut(&Context)> AppComponent for UiComponent<F> {
+impl AppComponent for UiComponent {
     fn label(&self) -> Option<&'static str> {
         Some("ui_component")
     }
@@ -75,7 +76,7 @@ impl<F: FnMut(&Context)> AppComponent for UiComponent<F> {
             let raw_input = self.state.take_egui_input(window);
 
             self.state.egui_ctx().begin_frame(raw_input);
-            (self.run_ui)(self.state.egui_ctx());
+            (self.context.runner())(self.state.egui_ctx());
             let full_output = self.state.egui_ctx().end_frame();
 
             self.state
