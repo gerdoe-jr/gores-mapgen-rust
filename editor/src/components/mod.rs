@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::app::{RenderContext, WgpuContext};
@@ -15,7 +17,7 @@ pub trait AppComponent {
         &mut self,
         window: &Window,
         render_context: Option<&mut RenderContext>,
-        wgpu_context: &WgpuContext,
+        wgpu_context: &Rc<RefCell<WgpuContext>>,
     );
     fn on_resize(&mut self, size: PhysicalSize<u32>);
 }

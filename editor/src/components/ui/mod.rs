@@ -1,5 +1,8 @@
 pub mod context;
+pub mod float;
 pub mod left_panel;
+
+use std::{cell::RefCell, rc::Rc};
 
 use context::UiContext;
 use egui::Context;
@@ -20,7 +23,11 @@ pub struct UiComponent {
 }
 
 impl UiComponent {
-    pub fn new(context: UiContext, window: &Window, wgpu_context: &WgpuContext) -> Self {
+    pub fn new(
+        context: UiContext,
+        window: &Window,
+        wgpu_context: Rc<RefCell<WgpuContext>>,
+    ) -> Self {
         let egui_context = Context::default();
 
         let state = egui_winit::State::new(
@@ -30,12 +37,17 @@ impl UiComponent {
             Some(window.scale_factor() as f32),
             None,
         );
-        let renderer = Renderer::new(&wgpu_context.device, wgpu_context.config.format, None, 1);
+        let renderer = Renderer::new(
+            &wgpu_context.borrow().device,
+            wgpu_context.borrow().config.format,
+            None,
+            1,
+        );
 
         Self {
             state,
             renderer,
-            context
+            context,
         }
     }
 }
@@ -54,8 +66,9 @@ impl AppComponent for UiComponent {
         &mut self,
         window: &Window,
         render_context: Option<&mut RenderContext>,
-        wgpu_context: &WgpuContext,
+        wgpu_context: &Rc<RefCell<WgpuContext>>,
     ) {
+        let wgpu_context = wgpu_context.borrow();
         if let Some(render_context) = render_context {
             let screen_descriptor = ScreenDescriptor {
                 size_in_pixels: [wgpu_context.config.width, wgpu_context.config.height],

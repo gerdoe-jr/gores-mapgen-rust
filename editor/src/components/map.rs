@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read, time::Instant};
+use std::{cell::RefCell, fs::File, io::Read, rc::Rc, time::Instant};
 
 use image::{codecs::png::PngDecoder, ColorType, ImageDecoder, RgbaImage};
 use twgpu::{
@@ -23,25 +23,27 @@ use crate::{
 use super::AppComponent;
 
 pub struct MapLoader {
+    wgpu_context: Rc<RefCell<WgpuContext>>,
     static_context: GpuMapStaticContext,
     dynamic_context: Option<(TwMap, GpuMapDynamicContext)>,
 }
 
 impl MapLoader {
-    fn new(static_context: GpuMapStaticContext) -> Self {
+    fn new(static_context: GpuMapStaticContext, wgpu_context: Rc<RefCell<WgpuContext>>) -> Self {
         Self {
             static_context,
             dynamic_context: None,
+            wgpu_context
         }
     }
 
-    pub fn load(&mut self, mut tw_map: TwMap, wgpu_context: &WgpuContext) -> &mut TwMap {
+    pub fn load(&mut self, mut tw_map: TwMap) -> &mut TwMap {
         for image in tw_map.images.iter_mut() {
             load_external_image(image, tw_map.version);
         }
 
         let dynamic_context =
-            GpuMapDynamicContext::upload(&tw_map, &self.static_context, wgpu_context);
+            GpuMapDynamicContext::upload(&tw_map, &self.static_context, self.wgpu_context.clone());
 
         self.dynamic_context = Some((tw_map, dynamic_context));
 
@@ -50,6 +52,10 @@ impl MapLoader {
 
     pub fn unload(&mut self) {
         self.dynamic_context = None;
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.dynamic_context.is_some()
     }
 }
 
@@ -60,7 +66,8 @@ struct GpuMapStaticContext {
 }
 
 impl GpuMapStaticContext {
-    pub fn new(camera: &Camera, wgpu_context: &WgpuContext) -> Self {
+    pub fn new(camera: &Camera, wgpu_context: Rc<RefCell<WgpuContext>>) -> Self {
+        let wgpu_context = wgpu_context.as_ref().borrow();
         Self {
             camera: GpuCamera::upload(camera, &wgpu_context.device),
             samplers: Samplers::new(&wgpu_context.device),
@@ -78,8 +85,9 @@ impl GpuMapDynamicContext {
     pub fn upload(
         tw_map: &TwMap,
         static_map_context: &GpuMapStaticContext,
-        wgpu_context: &WgpuContext,
+        wgpu_context: Rc<RefCell<WgpuContext>>,
     ) -> Self {
+        let wgpu_context = wgpu_context.as_ref().borrow();
         let data = GpuMapData::upload(tw_map, &wgpu_context.device, &wgpu_context.queue);
         let render = static_map_context.map.prepare_render(
             tw_map,
@@ -100,13 +108,13 @@ pub struct TwGpuComponent {
     camera: Camera,
     old_camera: Camera,
 
-    map_loader: MapLoader,
+    map_loader: Rc<RefCell<MapLoader>>,
 
     render_size: Vec2<f32>,
 }
 
 impl TwGpuComponent {
-    pub fn new(width: u32, height: u32, wgpu_context: &WgpuContext) -> Self {
+    pub fn new(width: u32, height: u32, wgpu_context: Rc<RefCell<WgpuContext>>) -> Self {
         let render_size: Vec2<f32> = Vec2::new(width, height).az();
 
         let camera = Camera::new(width as f32 / height as f32);
@@ -115,9 +123,9 @@ impl TwGpuComponent {
         let inputs = MultiInput::default();
         let cursors = Cursors::default();
 
-        let static_map_context = GpuMapStaticContext::new(&camera, wgpu_context);
+        let static_map_context = GpuMapStaticContext::new(&camera, wgpu_context.clone());
 
-        let map_loader = MapLoader::new(static_map_context);
+        let map_loader = Rc::new(RefCell::new(MapLoader::new(static_map_context, wgpu_context)));
 
         Self {
             inputs,
@@ -129,8 +137,8 @@ impl TwGpuComponent {
         }
     }
 
-    pub fn get_map_loader_handle(&mut self) -> &mut MapLoader {
-        &mut self.map_loader
+    pub fn get_map_loader_handle(&self) -> Rc<RefCell<MapLoader>> {
+        self.map_loader.clone()
     }
 }
 
@@ -192,8 +200,10 @@ impl AppComponent for TwGpuComponent {
         &mut self,
         _window: &Window,
         render_context: Option<&mut RenderContext>,
-        wgpu_context: &WgpuContext,
+        wgpu_context: &Rc<RefCell<WgpuContext>>,
     ) {
+        let wgpu_context = wgpu_context.borrow();
+
         self.inputs.update_camera(
             &mut self.camera,
             &self.old_camera,
@@ -203,7 +213,7 @@ impl AppComponent for TwGpuComponent {
 
         let time = Instant::now().elapsed().as_secs() as i64;
 
-        self.map_loader
+        self.map_loader.borrow()
             .static_context
             .camera
             .update(&self.camera, &wgpu_context.queue);
@@ -237,7 +247,7 @@ impl AppComponent for TwGpuComponent {
             let mut tw_render_pass =
                 TwRenderPass::new(render_pass, self.render_size.az(), &self.camera);
 
-            if let Some((tw_map, context)) = &self.map_loader.dynamic_context {
+            if let Some((tw_map, context)) = &self.map_loader.borrow().dynamic_context {
                 context.data.update(
                     tw_map,
                     &self.camera,

@@ -1,11 +1,12 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use egui_wgpu::wgpu::{
     self, InstanceDescriptor, PowerPreference, RequestAdapterOptions, TextureFormat,
 };
+use twmap::TwMap;
 use wgpu::{
-    Adapter, Backends, CommandEncoder, CommandEncoderDescriptor, CompositeAlphaMode, Device, Queue,
-    Surface, SurfaceConfiguration, TextureView, TextureViewDescriptor,
+    Backends, CommandEncoder, CommandEncoderDescriptor, CompositeAlphaMode, Device, Queue, Surface,
+    SurfaceConfiguration, TextureView, TextureViewDescriptor,
 };
 use winit::{
     dpi::PhysicalSize,
@@ -19,15 +20,21 @@ use twgpu::device_descriptor;
 
 use crate::components::{
     map::TwGpuComponent,
-    ui::{context::UiContext, left_panel::LeftPanelUi, UiComponent},
+    ui::{context::UiContext, float::FloatWindowUi, left_panel::LeftPanelUi, UiComponent},
     AppComponent,
 };
 
-pub struct WgpuContext<'w> {
+pub struct WgpuContext {
     pub device: Device,
     pub queue: Queue,
-    pub surface: Surface<'w>,
     pub config: SurfaceConfiguration,
+}
+
+impl WgpuContext {
+    fn set_size(&mut self, size: PhysicalSize<u32>) {
+        self.config.width = size.width;
+        self.config.height = size.height;
+    }
 }
 
 pub struct RenderContext {
@@ -35,16 +42,17 @@ pub struct RenderContext {
     pub surface_view: TextureView,
 }
 
-pub struct App<'w> {
+pub struct App<'w, 'a> {
     window: Arc<Window>,
     event_loop: EventLoop<()>,
 
-    wgpu_context: WgpuContext<'w>,
+    wgpu_context: Rc<RefCell<WgpuContext>>,
+    surface: Surface<'w>,
 
-    components: Vec<Box<dyn AppComponent>>,
+    components: Vec<Box<dyn AppComponent + 'a>>,
 }
 
-impl<'w> App<'w> {
+impl<'w, 'a> App<'w, 'a> {
     pub async fn new(width: u32, height: u32) -> Self {
         let event_loop = EventLoop::new().unwrap();
         let window = Arc::new(
@@ -100,26 +108,35 @@ impl<'w> App<'w> {
 
         surface.configure(&device, &config);
 
-        let wgpu_context = WgpuContext {
+        let wgpu_context = Rc::new(RefCell::new(WgpuContext {
             device,
             queue,
-            surface,
             config,
-        };
+        }));
+
+        let twgpu = Box::new(TwGpuComponent::new(width, height, wgpu_context.clone()));
+
+        let map_loader = twgpu.get_map_loader_handle();
+
+        let mut tw_map = TwMap::parse_path("./out.map").unwrap();
+        tw_map.load().unwrap();
+
+        map_loader.borrow_mut().load(tw_map);
 
         let mut ui_context = UiContext::new();
 
-        ui_context.add_renderable(LeftPanelUi::new());
+        ui_context.add_renderable(LeftPanelUi::new(map_loader));
+        ui_context.add_renderable(FloatWindowUi {});
 
-        let components: Vec<Box<dyn AppComponent>> = vec![
-            Box::new(TwGpuComponent::new(width, height, &wgpu_context)),
-            Box::new(UiComponent::new(ui_context, &window, &wgpu_context)),
-        ];
+        let ui = Box::new(UiComponent::new(ui_context, &window, wgpu_context.clone()));
+
+        let components: Vec<Box<dyn AppComponent>> = vec![twgpu, ui];
 
         Self {
             window,
             event_loop,
             wgpu_context,
+            surface,
             components,
         }
     }
@@ -145,7 +162,7 @@ impl<'w> App<'w> {
                     }
 
                     if let WindowEvent::RedrawRequested = window_event {
-                        let surface_texture = self.wgpu_context.surface.get_current_texture().ok();
+                        let surface_texture = self.surface.get_current_texture().ok();
                         let mut render_context = None;
 
                         if let Some(frame) = &surface_texture {
@@ -157,7 +174,7 @@ impl<'w> App<'w> {
                             for component in self.components.iter() {
                                 command_encoders.insert(
                                     component.label(),
-                                    self.wgpu_context.device.create_command_encoder(
+                                    self.wgpu_context.borrow().device.create_command_encoder(
                                         &CommandEncoderDescriptor {
                                             label: Some(component.label()),
                                         },
@@ -191,6 +208,7 @@ impl<'w> App<'w> {
                                     .unwrap();
 
                                 self.wgpu_context
+                                    .borrow()
                                     .queue
                                     .submit(Some(command_encoder.finish()));
                             }
@@ -202,11 +220,11 @@ impl<'w> App<'w> {
 
                     match window_event {
                         WindowEvent::Resized(size) => {
-                            self.wgpu_context.config.width = size.width;
-                            self.wgpu_context.config.height = size.height;
-                            self.wgpu_context
-                                .surface
-                                .configure(&self.wgpu_context.device, &self.wgpu_context.config);
+                            self.wgpu_context.borrow_mut().set_size(size);
+                            self.surface.configure(
+                                &self.wgpu_context.borrow().device,
+                                &self.wgpu_context.borrow().config,
+                            );
 
                             for component in self.components.iter_mut() {
                                 component.on_resize(size);
