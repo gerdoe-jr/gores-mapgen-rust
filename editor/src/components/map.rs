@@ -13,7 +13,7 @@ use wgpu::{
     RenderPassDescriptor, StoreOp,
 };
 use winit::{
-    dpi::PhysicalPosition,
+    dpi::{PhysicalPosition, PhysicalSize},
     event::{MouseScrollDelta, WindowEvent},
     window::Window,
 };
@@ -129,14 +129,8 @@ impl AppComponent for TwGpuComponent {
     fn label(&self) -> Option<&'static str> {
         Some("twgpu_component")
     }
-    fn on_window_event(&mut self, _window: &Window, event: &WindowEvent) {
+    fn on_user_input(&mut self, _window: &Window, event: &WindowEvent) {
         match *event {
-            WindowEvent::Resized(size) => {
-                self.render_size = Vec2::new(size.width, size.height).az();
-                self.camera
-                    .switch_aspect_ratio(self.render_size.x / self.render_size.y);
-                self.inputs.update_map_positions(&self.camera);
-            }
             WindowEvent::Touch(touch) => {
                 self.inputs.update_input(
                     &Input::from_touch(touch),
@@ -246,6 +240,13 @@ impl AppComponent for TwGpuComponent {
         }
 
         self.old_camera = self.camera;
+    }
+
+    fn on_resize(&mut self, size: PhysicalSize<u32>) {
+        self.render_size = Vec2::new(size.width, size.height).az();
+        self.camera
+            .switch_aspect_ratio(self.render_size.x / self.render_size.y);
+        self.inputs.update_map_positions(&self.camera);
     }
 }
 

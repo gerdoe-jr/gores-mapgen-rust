@@ -1,8 +1,8 @@
-use egui::{Context, RawInput};
+use egui::Context;
 use egui_wgpu::{Renderer, ScreenDescriptor};
 use egui_winit::State;
 use wgpu::{CommandEncoder, StoreOp, TextureView};
-use winit::{event::WindowEvent, window::Window};
+use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::app::{RenderContext, WgpuContext};
 
@@ -95,13 +95,17 @@ impl EguiComponent {
             self.renderer.free_texture(x)
         }
     }
+
+    pub fn is_handling_input(&self) -> bool {
+        self.state.egui_ctx().is_pointer_over_area()
+    }
 }
 
 impl AppComponent for EguiComponent {
     fn label(&self) -> Option<&'static str> {
         Some("egui_component")
     }
-    fn on_window_event(&mut self, window: &Window, event: &WindowEvent) {
+    fn on_user_input(&mut self, window: &Window, event: &WindowEvent) {
         let _ = self.state.on_window_event(window, event);
     }
 
@@ -142,4 +146,6 @@ impl AppComponent for EguiComponent {
             );
         }
     }
+
+    fn on_resize(&mut self, _size: PhysicalSize<u32>) {}
 }

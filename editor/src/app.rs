@@ -141,8 +141,10 @@ impl<'w> App<'w> {
                     //     component.on_window_event(&window_event, &self.wgpu_context);
                     // }
 
-                    self.egui.on_window_event(&self.window, &window_event);
-                    self.twgpu.on_window_event(&self.window, &window_event);
+                    self.egui.on_user_input(&self.window, &window_event);
+                    if !self.egui.is_handling_input() {
+                        self.twgpu.on_user_input(&self.window, &window_event);
+                    }
 
                     if let WindowEvent::RedrawRequested = window_event {
                         let surface_texture = self.wgpu_context.surface.get_current_texture().ok();
@@ -211,6 +213,9 @@ impl<'w> App<'w> {
                             self.wgpu_context
                                 .surface
                                 .configure(&self.wgpu_context.device, &self.wgpu_context.config);
+
+                            self.twgpu.on_resize(size);
+                            self.egui.on_resize(size);
                         }
                         WindowEvent::CloseRequested => target.exit(),
                         _ => {}
