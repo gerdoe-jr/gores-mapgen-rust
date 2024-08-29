@@ -10,7 +10,7 @@ pub trait AppComponent {
         None
     }
 
-    fn on_user_input(&mut self, window: &Window, event: &WindowEvent);
+    fn on_user_input(&mut self, window: &Window, event: &WindowEvent) -> bool;
     fn on_render(
         &mut self,
         window: &Window,

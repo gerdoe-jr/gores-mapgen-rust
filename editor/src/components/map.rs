@@ -138,7 +138,7 @@ impl AppComponent for TwGpuComponent {
     fn label(&self) -> Option<&'static str> {
         Some("twgpu_component")
     }
-    fn on_user_input(&mut self, _window: &Window, event: &WindowEvent) {
+    fn on_user_input(&mut self, _window: &Window, event: &WindowEvent) -> bool {
         match *event {
             WindowEvent::Touch(touch) => {
                 self.inputs.update_input(
@@ -183,6 +183,9 @@ impl AppComponent for TwGpuComponent {
             }
             _ => {}
         }
+
+        // pass through other input handlers
+        false
     }
 
     fn on_render(

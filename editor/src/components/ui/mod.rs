@@ -38,18 +38,16 @@ impl UiComponent {
             context
         }
     }
-
-    pub fn is_handling_input(&self) -> bool {
-        self.state.egui_ctx().is_pointer_over_area()
-    }
 }
 
 impl AppComponent for UiComponent {
     fn label(&self) -> Option<&'static str> {
         Some("ui_component")
     }
-    fn on_user_input(&mut self, window: &Window, event: &WindowEvent) {
+    fn on_user_input(&mut self, window: &Window, event: &WindowEvent) -> bool {
         let _ = self.state.on_window_event(window, event);
+
+        self.state.egui_ctx().is_pointer_over_area()
     }
 
     fn on_render(

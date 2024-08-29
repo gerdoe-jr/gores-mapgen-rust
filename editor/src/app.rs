@@ -1,6 +1,5 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use egui::ahash::HashMap;
 use egui_wgpu::wgpu::{
     self, InstanceDescriptor, PowerPreference, RequestAdapterOptions, TextureFormat,
 };
@@ -43,9 +42,7 @@ pub struct App<'w> {
 
     wgpu_context: WgpuContext<'w>,
 
-    // components: Vec<Box<dyn AppComponent>>,
-    twgpu: TwGpuComponent,
-    egui: UiComponent,
+    components: Vec<Box<dyn AppComponent>>,
 }
 
 impl<'w> App<'w> {
@@ -116,16 +113,16 @@ impl<'w> App<'w> {
 
         ui_context.add_renderable(LeftPanelUi::new());
 
-        let twgpu = TwGpuComponent::new(width, height, &wgpu_context);
-        let egui = UiComponent::new(ui_context, &window, &wgpu_context);
+        let components: Vec<Box<dyn AppComponent>> = vec![
+            Box::new(TwGpuComponent::new(width, height, &wgpu_context)),
+            Box::new(UiComponent::new(ui_context, &window, &wgpu_context)),
+        ];
 
         Self {
             window,
             event_loop,
             wgpu_context,
-
-            twgpu,
-            egui,
+            components,
         }
     }
 
@@ -142,9 +139,11 @@ impl<'w> App<'w> {
                     //     component.on_window_event(&window_event, &self.wgpu_context);
                     // }
 
-                    self.egui.on_user_input(&self.window, &window_event);
-                    if !self.egui.is_handling_input() {
-                        self.twgpu.on_user_input(&self.window, &window_event);
+                    // process user input from top layer to bottom
+                    for component in self.components.iter_mut().rev() {
+                        if component.on_user_input(&self.window, &window_event) {
+                            break;
+                        }
                     }
 
                     if let WindowEvent::RedrawRequested = window_event {
@@ -154,21 +153,19 @@ impl<'w> App<'w> {
                         if let Some(frame) = &surface_texture {
                             let surface_view =
                                 frame.texture.create_view(&TextureViewDescriptor::default());
-                            let twgpu = self.wgpu_context.device.create_command_encoder(
-                                &CommandEncoderDescriptor {
-                                    label: self.twgpu.label(),
-                                },
-                            );
-                            let egui = self.wgpu_context.device.create_command_encoder(
-                                &CommandEncoderDescriptor {
-                                    label: self.egui.label(),
-                                },
-                            );
 
-                            let command_encoders = HashMap::from_iter([
-                                (self.twgpu.label().unwrap(), twgpu),
-                                (self.egui.label().unwrap(), egui),
-                            ]);
+                            let mut command_encoders = HashMap::new();
+
+                            for component in self.components.iter() {
+                                command_encoders.insert(
+                                    component.label().unwrap(),
+                                    self.wgpu_context.device.create_command_encoder(
+                                        &CommandEncoderDescriptor {
+                                            label: component.label(),
+                                        },
+                                    ),
+                                );
+                            }
 
                             render_context = Some(RenderContext {
                                 command_encoders,
@@ -176,32 +173,30 @@ impl<'w> App<'w> {
                             })
                         }
 
-                        self.twgpu.on_render(
-                            &self.window,
-                            render_context.as_mut(),
-                            &self.wgpu_context,
-                        );
-                        self.egui.on_render(
-                            &self.window,
-                            render_context.as_mut(),
-                            &self.wgpu_context,
-                        );
+                        // process render
+                        for component in self.components.iter_mut() {
+                            component.on_render(
+                                &self.window,
+                                render_context.as_mut(),
+                                &self.wgpu_context,
+                            );
+                        }
 
                         if render_context.is_some() {
-                            let twgpu_encoder = render_context
-                                .as_mut()
-                                .unwrap()
-                                .command_encoders
-                                .remove(self.twgpu.label().unwrap())
-                                .unwrap();
-                            let egui_encoder = render_context
-                                .as_mut()
-                                .unwrap()
-                                .command_encoders
-                                .remove(self.egui.label().unwrap())
-                                .unwrap();
-                            self.wgpu_context.queue.submit(Some(twgpu_encoder.finish()));
-                            self.wgpu_context.queue.submit(Some(egui_encoder.finish()));
+                            // send command buffers
+                            for component in self.components.iter_mut() {
+                                let command_encoder = render_context
+                                    .as_mut()
+                                    .unwrap()
+                                    .command_encoders
+                                    .remove(component.label().unwrap())
+                                    .unwrap();
+
+                                self.wgpu_context
+                                    .queue
+                                    .submit(Some(command_encoder.finish()));
+                            }
+
                             surface_texture.unwrap().present();
                             self.window.request_redraw();
                         }
@@ -215,8 +210,9 @@ impl<'w> App<'w> {
                                 .surface
                                 .configure(&self.wgpu_context.device, &self.wgpu_context.config);
 
-                            self.twgpu.on_resize(size);
-                            self.egui.on_resize(size);
+                            for component in self.components.iter_mut() {
+                                component.on_resize(size);
+                            }
                         }
                         WindowEvent::CloseRequested => target.exit(),
                         _ => {}
