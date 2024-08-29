@@ -8,10 +8,7 @@ use twgpu::{
 };
 use twmap::{EmbeddedImage, Image, TwMap, Version};
 use vek::Vec2;
-use wgpu::{
-    Color, LoadOp, Operations, RenderPassColorAttachment,
-    RenderPassDescriptor, StoreOp,
-};
+use wgpu::{Color, LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{MouseScrollDelta, WindowEvent},
@@ -24,6 +21,37 @@ use crate::{
 };
 
 use super::AppComponent;
+
+pub struct MapLoader {
+    static_context: GpuMapStaticContext,
+    dynamic_context: Option<(TwMap, GpuMapDynamicContext)>,
+}
+
+impl MapLoader {
+    fn new(static_context: GpuMapStaticContext) -> Self {
+        Self {
+            static_context,
+            dynamic_context: None,
+        }
+    }
+
+    pub fn load(&mut self, mut tw_map: TwMap, wgpu_context: &WgpuContext) -> &mut TwMap {
+        for image in tw_map.images.iter_mut() {
+            load_external_image(image, tw_map.version);
+        }
+
+        let dynamic_context =
+            GpuMapDynamicContext::upload(&tw_map, &self.static_context, wgpu_context);
+
+        self.dynamic_context = Some((tw_map, dynamic_context));
+
+        &mut self.dynamic_context.as_mut().unwrap().0
+    }
+
+    pub fn unload(&mut self) {
+        self.dynamic_context = None;
+    }
+}
 
 struct GpuMapStaticContext {
     camera: GpuCamera,
@@ -42,32 +70,26 @@ impl GpuMapStaticContext {
 }
 
 struct GpuMapDynamicContext {
-    tw_map: TwMap,
-
     data: GpuMapData,
     render: GpuMapRender,
 }
 
 impl GpuMapDynamicContext {
-    pub fn new(
-        tw_map: TwMap,
+    pub fn upload(
+        tw_map: &TwMap,
         static_map_context: &GpuMapStaticContext,
         wgpu_context: &WgpuContext,
     ) -> Self {
-        let data = GpuMapData::upload(&tw_map, &wgpu_context.device, &wgpu_context.queue);
+        let data = GpuMapData::upload(tw_map, &wgpu_context.device, &wgpu_context.queue);
         let render = static_map_context.map.prepare_render(
-            &tw_map,
+            tw_map,
             &data,
             &static_map_context.camera,
             &static_map_context.samplers,
             &wgpu_context.device,
         );
 
-        Self {
-            tw_map,
-            data,
-            render,
-        }
+        Self { data, render }
     }
 }
 
@@ -78,8 +100,7 @@ pub struct TwGpuComponent {
     camera: Camera,
     old_camera: Camera,
 
-    static_map_context: GpuMapStaticContext,
-    dynamic_map_context: Option<GpuMapDynamicContext>,
+    map_loader: MapLoader,
 
     render_size: Vec2<f32>,
 }
@@ -96,32 +117,20 @@ impl TwGpuComponent {
 
         let static_map_context = GpuMapStaticContext::new(&camera, wgpu_context);
 
+        let map_loader = MapLoader::new(static_map_context);
+
         Self {
             inputs,
             cursors,
             camera,
             old_camera,
-            static_map_context,
-            dynamic_map_context: None,
+            map_loader,
             render_size,
         }
     }
 
-    // TODO: introduce proxy loader to let App use it as AppComponent
-    pub fn load_map(&mut self, mut tw_map: TwMap, wgpu_context: &WgpuContext) {
-        for image in tw_map.images.iter_mut() {
-            load_external_image(image, tw_map.version);
-        }
-
-        self.dynamic_map_context = Some(GpuMapDynamicContext::new(
-            tw_map,
-            &self.static_map_context,
-            wgpu_context,
-        ));
-    }
-
-    pub fn unload_map(&mut self) {
-        self.dynamic_map_context = None;
+    pub fn get_map_loader_handle(&mut self) -> &mut MapLoader {
+        &mut self.map_loader
     }
 }
 
@@ -191,7 +200,8 @@ impl AppComponent for TwGpuComponent {
 
         let time = Instant::now().elapsed().as_secs() as i64;
 
-        self.static_map_context
+        self.map_loader
+            .static_context
             .camera
             .update(&self.camera, &wgpu_context.queue);
 
@@ -224,9 +234,9 @@ impl AppComponent for TwGpuComponent {
             let mut tw_render_pass =
                 TwRenderPass::new(render_pass, self.render_size.az(), &self.camera);
 
-            if let Some(context) = &self.dynamic_map_context {
+            if let Some((tw_map, context)) = &self.map_loader.dynamic_context {
                 context.data.update(
-                    &context.tw_map,
+                    tw_map,
                     &self.camera,
                     self.render_size.az(),
                     time,

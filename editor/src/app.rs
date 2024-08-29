@@ -17,7 +17,6 @@ use winit::{
 };
 
 use twgpu::device_descriptor;
-use twmap::TwMap;
 
 use crate::components::{egui::EguiComponent, map::TwGpuComponent, AppComponent};
 
@@ -101,9 +100,6 @@ impl<'w> App<'w> {
 
         surface.configure(&device, &config);
 
-        let mut map = TwMap::parse_path("./out.map").unwrap();
-        map.load().unwrap();
-
         let wgpu_context = WgpuContext {
             adapter,
             device,
@@ -126,9 +122,6 @@ impl<'w> App<'w> {
     }
 
     pub async fn run(mut self) -> Result<(), EventLoopError> {
-        let mut tw_map = TwMap::parse_path("./out.map").unwrap();
-        tw_map.load().unwrap();
-        self.twgpu.load_map(tw_map, &self.wgpu_context);
         self.event_loop.run(|event, target| {
             target.set_control_flow(ControlFlow::Poll);
 
