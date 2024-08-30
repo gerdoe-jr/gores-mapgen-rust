@@ -3,10 +3,11 @@ use crate::{
     mutations::{MutationState, Mutator},
 };
 
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct TransitionBrushMutation {
-    value_from: usize,
-    value_to: usize,
-    overall_steps: usize,
+    pub value_from: usize,
+    pub value_to: usize,
+    pub overall_steps: usize,
     steps: usize,
 }
 

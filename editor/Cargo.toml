@@ -11,6 +11,7 @@ egui-wgpu = { version = "0.26", features = ["winit"] }
 egui-winit = "0.26"
 egui = "0.26"
 egui-file-dialog = "0.4"
+egui-snarl = "0.3"
 
 vek = { version = "0.16.1", default-features = false, features = ["bytemuck", "az", "rgba", "std", "uv"] }
 twmap = "0.12"

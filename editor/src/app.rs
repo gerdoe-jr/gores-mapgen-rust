@@ -3,7 +3,6 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 use egui_wgpu::wgpu::{
     self, InstanceDescriptor, PowerPreference, RequestAdapterOptions, TextureFormat,
 };
-use twmap::TwMap;
 use wgpu::{
     Backends, CommandEncoder, CommandEncoderDescriptor, CompositeAlphaMode, Device, Queue, Surface,
     SurfaceConfiguration, TextureView, TextureViewDescriptor,
@@ -20,7 +19,7 @@ use twgpu::device_descriptor;
 
 use crate::components::{
     map::TwGpuComponent,
-    ui::{context::UiContext, float::FloatWindowUi, left_panel::LeftPanelUi, UiComponent},
+    ui::{bottom_panel::BottomPanelUi, context::UiContext, float::FloatWindowUi, left_panel::LeftPanelUi, UiComponent},
     AppComponent,
 };
 
@@ -118,14 +117,10 @@ impl<'w, 'a> App<'w, 'a> {
 
         let map_loader = twgpu.get_map_loader_handle();
 
-        let mut tw_map = TwMap::parse_path("./out.map").unwrap();
-        tw_map.load().unwrap();
-
-        map_loader.borrow_mut().load(tw_map);
-
         let mut ui_context = UiContext::new();
 
         ui_context.add_renderable(LeftPanelUi::new(map_loader));
+        ui_context.add_renderable(BottomPanelUi::new());
         ui_context.add_renderable(FloatWindowUi {});
 
         let ui = Box::new(UiComponent::new(ui_context, &window, wgpu_context.clone()));

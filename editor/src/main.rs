@@ -1,14 +1,12 @@
 mod app;
-mod input_handler;
 mod components;
+mod input_handler;
 
 use app::App;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        pollster::block_on(run());
-    }
+    pollster::block_on(run());
 }
 
 async fn run() {

@@ -1,3 +1,4 @@
+pub mod bottom_panel;
 pub mod context;
 pub mod float;
 pub mod left_panel;
@@ -29,6 +30,9 @@ impl UiComponent {
         wgpu_context: Rc<RefCell<WgpuContext>>,
     ) -> Self {
         let egui_context = Context::default();
+
+        // speed up this lazy ui
+        egui_context.style_mut(|style| style.animation_time /= 2.0);
 
         let state = egui_winit::State::new(
             egui_context,

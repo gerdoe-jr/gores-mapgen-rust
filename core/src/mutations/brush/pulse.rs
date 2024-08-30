@@ -3,11 +3,12 @@ use crate::{
     mutations::{MutationState, Mutator},
 };
 
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct PulseBrushMutation {
-    value_border: usize, // from, to
-    value_climax: usize,
-    normal_peak: f32, // 0 to 1
-    overall_steps: usize,
+    pub value_border: usize, // from, to
+    pub value_climax: usize,
+    pub normal_peak: f32, // 0 to 1
+    pub overall_steps: usize,
     steps: usize,
 }
 

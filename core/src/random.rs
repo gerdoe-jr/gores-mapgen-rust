@@ -96,7 +96,7 @@ pub fn random_seed() -> Seed {
     SmallRng::from_entropy().next_u64()
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Random {
     seed: Seed,
     prng: SmallRng,
@@ -156,5 +156,11 @@ impl Random {
         for _ in 0..n {
             self.skip();
         }
+    }
+}
+
+impl Default for Random {
+    fn default() -> Self {
+        Self { seed: 0, prng: SmallRng::seed_from_u64(0) }
     }
 }
