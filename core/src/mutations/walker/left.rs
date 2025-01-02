@@ -31,4 +31,8 @@ impl Mutator<Walker> for LeftWalkerMutation {
 
         MutationState::Processing
     }
+
+    fn reset(&mut self) {
+        self.steps = self.overall_steps;
+    }
 }

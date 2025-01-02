@@ -1,14 +1,27 @@
+use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
+
 use egui::{emath::Numeric, Color32, Id, Label, RichText, Sense, Ui};
 use egui_snarl::{
     ui::{PinInfo, SnarlStyle, SnarlViewer},
     Snarl,
 };
-use mapgen_core::mutations::{
-    brush::{pulse::PulseBrushMutation, transition::TransitionBrushMutation},
-    walker::{
-        backwards::BackwardsWalkerMutation, left::LeftWalkerMutation, random::RandomWalkerMutation,
-        right::RightWalkerMutation, straight::StraightWalkerMutation,
+use mapgen_core::{
+    brush::Brush,
+    map::Map,
+    mutations::{
+        brush::{pulse::PulseBrushMutation, transition::TransitionBrushMutation},
+        walker::{
+            backwards::BackwardsWalkerMutation, left::LeftWalkerMutation,
+            random::RandomWalkerMutation, right::RightWalkerMutation,
+            straight::StraightWalkerMutation,
+        },
+        Mutator,
     },
+    walker::Walker,
+};
+
+use crate::components::utils::generation::{
+    DesignImageInfo, DesignInfo, DesignLayer, GenerationContext,
 };
 
 use super::context::RenderableUi;
@@ -16,31 +29,65 @@ use super::context::RenderableUi;
 const UNTYPED_COLOR: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
 
 #[derive(Debug, Clone, PartialEq)]
-enum UiNode {
-    StartNode,
+pub enum UiNode {
+    GeneratorNode,
     MutationNode(UiMutation),
-    EndNode,
+    LoopStartNode(Option<usize>),
+    LoopEndNode,
 }
 
-impl UiNode {
-    fn title(&self) -> String {
+impl Titled for UiNode {
+    fn title(&self) -> &'static str {
         match self {
+            UiNode::GeneratorNode => "Generator",
             UiNode::MutationNode(mutation) => mutation.title(),
-            UiNode::StartNode => "Start".to_owned(),
-            UiNode::EndNode => "End".to_owned(),
+            UiNode::LoopStartNode(_) => "LoopStart",
+            UiNode::LoopEndNode => "LoopEnd"
         }
     }
 }
 
+impl UiNode {
+    // TODO: it's less ugly, but maybe there's something better
+    fn default_all_variants() -> Vec<UiNode> {
+        vec![
+            UiNode::GeneratorNode,
+            UiNode::MutationNode(UiMutation::Brush(
+                UiBrushMutation::Pulse(Default::default()),
+            )),
+            UiNode::MutationNode(UiMutation::Brush(UiBrushMutation::Transition(
+                Default::default(),
+            ))),
+            UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Straight(
+                Default::default(),
+            ))),
+            UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Backwards(
+                Default::default(),
+            ))),
+            UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Left(
+                Default::default(),
+            ))),
+            UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Right(
+                Default::default(),
+            ))),
+            UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Random(
+                Default::default(),
+            ))),
+            UiNode::LoopStartNode(None),
+            UiNode::LoopEndNode
+        ]
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-enum UiMutation {
+pub enum UiMutation {
     Brush(UiBrushMutation),
     Map(UiMapMutation),
     Walker(UiWalkerMutation),
 }
 
 impl UiMutation {
-    fn title(&self) -> String {
+    fn title(&self) -> &'static str {
         match self {
             UiMutation::Brush(mutation) => mutation.title(),
             UiMutation::Map(mutation) => mutation.title(),
@@ -49,32 +96,136 @@ impl UiMutation {
     }
 }
 
+pub trait ExtractMutation<GivenType> {
+    type ExtractType: ExtractMutation<GivenType> + Titled;
+    const INPUT: usize = 0;
+
+    fn extract(&self) -> Option<Self::ExtractType> {
+        None
+    }
+}
+
+impl ExtractMutation<Brush> for UiMutation {
+    type ExtractType = UiBrushMutation;
+
+    fn extract(&self) -> Option<Self::ExtractType> {
+        match self {
+            UiMutation::Brush(mutation) => Some(mutation.clone()),
+            _ => None,
+        }
+    }
+
+    const INPUT: usize = 0;
+}
+
+impl ExtractMutation<Map> for UiMutation {
+    type ExtractType = UiMapMutation;
+
+    fn extract(&self) -> Option<Self::ExtractType> {
+        match self {
+            UiMutation::Map(mutation) => Some(mutation.clone()),
+            _ => None,
+        }
+    }
+
+    const INPUT: usize = 1;
+}
+
+impl ExtractMutation<Walker> for UiMutation {
+    type ExtractType = UiWalkerMutation;
+
+    fn extract(&self) -> Option<Self::ExtractType> {
+        match self {
+            UiMutation::Walker(mutation) => Some(mutation.clone()),
+            _ => None,
+        }
+    }
+
+    const INPUT: usize = 2;
+}
+
+impl ExtractMutation<Brush> for UiBrushMutation {
+    type ExtractType = Box<dyn Mutator<Brush>>;
+
+    fn extract(&self) -> Option<Self::ExtractType> {
+        Some(match self {
+            UiBrushMutation::Pulse(mutation) => Box::new(mutation.clone()),
+            UiBrushMutation::Transition(mutation) => Box::new(mutation.clone()),
+        })
+    }
+}
+
+impl ExtractMutation<Map> for UiMapMutation {
+    type ExtractType = Box<dyn Mutator<Map>>;
+
+    fn extract(&self) -> Option<Self::ExtractType> {
+        None
+    }
+}
+
+impl ExtractMutation<Walker> for UiWalkerMutation {
+    type ExtractType = Box<dyn Mutator<Walker>>;
+
+    fn extract(&self) -> Option<Self::ExtractType> {
+        Some(match self {
+            UiWalkerMutation::Straight(mutation) => {
+                println!("REAL: {}", mutation.overall_steps);
+                Box::new(mutation.clone())
+            }
+            UiWalkerMutation::Backwards(mutation) => Box::new(mutation.clone()),
+            UiWalkerMutation::Left(mutation) => Box::new(mutation.clone()),
+            UiWalkerMutation::Right(mutation) => Box::new(mutation.clone()),
+            UiWalkerMutation::Random(mutation) => Box::new(mutation.clone()),
+        })
+    }
+}
+
+impl<M> ExtractMutation<M> for Box<dyn Mutator<M>> {
+    type ExtractType = ();
+}
+
+impl<M> ExtractMutation<M> for () {
+    type ExtractType = ();
+}
+
+impl Titled for () {
+    fn title(&self) -> &'static str {
+        ""
+    }
+}
+
+impl<T> Titled for Box<dyn Mutator<T>> {
+    fn title(&self) -> &'static str {
+        "Mutator"
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-enum UiBrushMutation {
+pub enum UiBrushMutation {
     Pulse(PulseBrushMutation),
     Transition(TransitionBrushMutation),
 }
 
-impl UiBrushMutation {
-    fn title(&self) -> String {
+impl Titled for UiBrushMutation {
+    fn title(&self) -> &'static str {
         match self {
-            UiBrushMutation::Pulse(_) => "Pulse".to_owned(),
-            UiBrushMutation::Transition(_) => "Transition".to_owned(),
+            UiBrushMutation::Pulse(_) => "Pulse",
+            UiBrushMutation::Transition(_) => "Transition",
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum UiMapMutation {}
+pub enum UiMapMutation {}
 
-impl UiMapMutation {
-    fn title(&self) -> String {
+impl Titled for UiMapMutation {
+    fn title(&self) -> &'static str {
         unreachable!()
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum UiWalkerMutation {
+pub enum UiWalkerMutation {
     Straight(StraightWalkerMutation),
     Backwards(BackwardsWalkerMutation),
     Left(LeftWalkerMutation),
@@ -82,36 +233,46 @@ enum UiWalkerMutation {
     Random(RandomWalkerMutation),
 }
 
-impl UiWalkerMutation {
-    fn title(&self) -> String {
+impl Titled for UiWalkerMutation {
+    fn title(&self) -> &'static str {
         match self {
-            UiWalkerMutation::Straight(_) => "Straight".to_owned(),
-            UiWalkerMutation::Backwards(_) => "Backwards".to_owned(),
-            UiWalkerMutation::Left(_) => "Left".to_owned(),
-            UiWalkerMutation::Right(_) => "Right".to_owned(),
-            UiWalkerMutation::Random(_) => "Random".to_owned(),
+            UiWalkerMutation::Straight(_) => "Straight",
+            UiWalkerMutation::Backwards(_) => "Backwards",
+            UiWalkerMutation::Left(_) => "Left",
+            UiWalkerMutation::Right(_) => "Right",
+            UiWalkerMutation::Random(_) => "Random",
         }
     }
 }
 
-struct UiViewer;
+pub trait Titled {
+    fn title(&self) -> &'static str;
+}
+
+struct UiViewer {
+    generation: Rc<RefCell<GenerationContext>>,
+}
 
 impl SnarlViewer<UiNode> for UiViewer {
     fn title(&mut self, node: &UiNode) -> String {
-        node.title()
+        node.title().to_owned()
     }
 
     fn outputs(&mut self, node: &UiNode) -> usize {
         match node {
-            UiNode::EndNode => 0,
-            _ => 1,
+            UiNode::GeneratorNode => 0,
+            UiNode::MutationNode(_) => 1,
+            UiNode::LoopStartNode(_)
+            | UiNode::LoopEndNode => 1
         }
     }
 
     fn inputs(&mut self, node: &UiNode) -> usize {
         match node {
-            UiNode::StartNode => 0,
-            _ => 1,
+            UiNode::GeneratorNode => 3,
+            UiNode::MutationNode(_) => 1,
+            UiNode::LoopStartNode(_)
+            | UiNode::LoopEndNode => 1
         }
     }
 
@@ -153,7 +314,40 @@ impl SnarlViewer<UiNode> for UiViewer {
         let id = format!("{}_grid", snarl[node].title());
 
         match &mut snarl[node] {
-            UiNode::StartNode => {}
+            UiNode::GeneratorNode => {
+                if ui.button("Proceed").clicked() {
+                    let mut image_infos = HashMap::new();
+
+                    image_infos.insert(
+                        DesignLayer::Freeze,
+                        DesignImageInfo::new("data/mapres/entities.png", 1),
+                    );
+                    image_infos.insert(
+                        DesignLayer::Hookable,
+                        DesignImageInfo::new("data/mapres/jungle_main.png", 2),
+                    );
+                    image_infos.insert(
+                        DesignLayer::Unhookable,
+                        DesignImageInfo::new("data/mapres/entities.png", 3),
+                    );
+
+                    let design = DesignInfo::new(image_infos);
+                    self.generation.borrow_mut().set_scale_factor(200.0);
+                    self.generation.borrow_mut().generate(
+                        snarl,
+                        node,
+                        &design,
+                        vec![
+                            (0.0, 1.0),
+                            (0.2, 0.8),
+                            (0.4, 0.6),
+                            (0.6, 0.4),
+                            (0.8, 0.2),
+                            (1.0, 0.0),
+                        ],
+                    );
+                }
+            }
             UiNode::MutationNode(mutation) => match mutation {
                 UiMutation::Brush(mutation) => match mutation {
                     UiBrushMutation::Pulse(ref mut mutation) => {
@@ -195,7 +389,18 @@ impl SnarlViewer<UiNode> for UiViewer {
                     }
                 },
             },
-            UiNode::EndNode => {}
+            UiNode::LoopStartNode(count) => {
+                if ui.button("Toggle endless").clicked() {
+                    match count {
+                        Some(_) => *count = None,
+                        None => *count = Some(1),
+                    }
+                }
+                if let Some(count) = count {
+                    field_numeric(ui, "CountValue", count);
+                }
+            }
+            UiNode::LoopEndNode => {}
         }
     }
 
@@ -218,41 +423,17 @@ impl SnarlViewer<UiNode> for UiViewer {
     }
 
     fn graph_menu(&mut self, pos: egui::Pos2, ui: &mut Ui, _scale: f32, snarl: &mut Snarl<UiNode>) {
-        // TODO: refactor it somehow lol
-
-        const MARKER_TYPES: [&'static str; 2] = ["Start", "End"];
-        const BRUSH_TYPES: [&'static str; 2] = ["Pulse", "Transition"];
-        const MAP_TYPES: [&'static str; 0] = [];
-        const WALKER_TYPES: [&'static str; 5] =
-            ["Straight", "Backwards", "Left", "Right", "Random"];
-
-        fn title(index: usize) -> &'static str {
-            if index < MARKER_TYPES.len() {
-                MARKER_TYPES[index]
-            } else if index - MARKER_TYPES.len() < BRUSH_TYPES.len() {
-                BRUSH_TYPES[index - MARKER_TYPES.len()]
-            } else if (index - MARKER_TYPES.len() - BRUSH_TYPES.len()) < MAP_TYPES.len() {
-                MAP_TYPES[index - MARKER_TYPES.len() - BRUSH_TYPES.len()]
-            } else if (index - MARKER_TYPES.len() - BRUSH_TYPES.len() - MAP_TYPES.len())
-                < WALKER_TYPES.len()
-            {
-                WALKER_TYPES[index - MARKER_TYPES.len() - BRUSH_TYPES.len() - MAP_TYPES.len()]
-            } else {
-                unreachable!()
-            }
-        }
+        let all_variants = UiNode::default_all_variants();
 
         let mut selected = None;
 
         ui.label("Add Node");
         ui.separator();
 
-        for i in 0..(MARKER_TYPES.len() + BRUSH_TYPES.len() + MAP_TYPES.len() + WALKER_TYPES.len())
-        {
+        for i in 0..all_variants.len() {
             if ui
                 .add(
-                    Label::new(RichText::new(title(i)).monospace())
-                        .selectable(true)
+                    Label::new(RichText::new(all_variants[i].title()).monospace())
                         .sense(Sense::click()),
                 )
                 .clicked()
@@ -262,36 +443,8 @@ impl SnarlViewer<UiNode> for UiViewer {
             }
         }
 
-        // TODO: ugly
         if let Some(i) = selected {
-            let node = match i {
-                0 => UiNode::StartNode,
-                1 => UiNode::EndNode,
-                2 => UiNode::MutationNode(UiMutation::Brush(UiBrushMutation::Pulse(
-                    Default::default(),
-                ))),
-                3 => UiNode::MutationNode(UiMutation::Brush(UiBrushMutation::Transition(
-                    Default::default(),
-                ))),
-
-                4 => UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Straight(
-                    Default::default(),
-                ))),
-                5 => UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Backwards(
-                    Default::default(),
-                ))),
-                6 => UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Left(
-                    Default::default(),
-                ))),
-                7 => UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Right(
-                    Default::default(),
-                ))),
-                8 => UiNode::MutationNode(UiMutation::Walker(UiWalkerMutation::Random(
-                    Default::default(),
-                ))),
-
-                _ => unreachable!(),
-            };
+            let node = all_variants[i].clone();
 
             snarl.insert_node(pos, node);
         }
@@ -305,9 +458,48 @@ impl SnarlViewer<UiNode> for UiViewer {
         snarl: &mut Snarl<UiNode>,
     ) {
         match (&snarl[from.id.node], &snarl[to.id.node]) {
-            (UiNode::StartNode, UiNode::EndNode) => {}
-            (UiNode::StartNode, UiNode::MutationNode(_)) => {}
-            (UiNode::MutationNode(_), UiNode::EndNode) => {}
+            (UiNode::MutationNode(mutation), UiNode::GeneratorNode) => {
+                let eh_stop_it;
+
+                match mutation {
+                    UiMutation::Brush(_) => {
+                        eh_stop_it = to.id.input == <UiMutation as ExtractMutation<Brush>>::INPUT
+                    }
+                    UiMutation::Map(_) => {
+                        eh_stop_it = to.id.input == <UiMutation as ExtractMutation<Map>>::INPUT
+                    }
+                    UiMutation::Walker(_) => {
+                        eh_stop_it = to.id.input == <UiMutation as ExtractMutation<Walker>>::INPUT
+                    }
+                }
+
+                if !eh_stop_it {
+                    return;
+                }
+            }
+            (UiNode::GeneratorNode, UiNode::MutationNode(mutation)) => {
+                let eh_stop_it;
+
+                match mutation {
+                    UiMutation::Brush(_) => {
+                        eh_stop_it = from.id.output == <UiMutation as ExtractMutation<Brush>>::INPUT
+                    }
+                    UiMutation::Map(_) => {
+                        eh_stop_it = from.id.output == <UiMutation as ExtractMutation<Map>>::INPUT
+                    }
+                    UiMutation::Walker(_) => {
+                        eh_stop_it =
+                            from.id.output == <UiMutation as ExtractMutation<Walker>>::INPUT
+                    }
+                }
+
+                if eh_stop_it {
+                    return;
+                }
+            }
+            (UiNode::LoopStartNode(_) | UiNode::LoopEndNode, UiNode::MutationNode(_)) => {},
+            (UiNode::LoopStartNode(_) | UiNode::LoopEndNode, UiNode::GeneratorNode) => {}
+            (UiNode::MutationNode(_), UiNode::LoopStartNode(_) | UiNode::LoopEndNode) => {}
             (
                 UiNode::MutationNode(UiMutation::Brush(_)),
                 UiNode::MutationNode(UiMutation::Brush(_)),
@@ -334,14 +526,32 @@ impl SnarlViewer<UiNode> for UiViewer {
 pub struct BottomPanelUi {
     snarl: Snarl<UiNode>,
     style: SnarlStyle,
+    viewer: UiViewer,
 }
 
 impl BottomPanelUi {
     pub fn new() -> Self {
+        let mut snarl = Snarl::new();
+
+        snarl.insert_node(
+            egui::pos2(-190.0, 0.0),
+            UiNode::MutationNode(UiMutation::Brush(UiBrushMutation::Pulse(
+                PulseBrushMutation::new(1, 20, 200, 0.5),
+            ))),
+        );
+        snarl.insert_node(egui::pos2(240.0, 0.0), UiNode::GeneratorNode);
+
         Self {
-            snarl: Snarl::new(),
+            snarl,
             style: SnarlStyle::new(),
+            viewer: UiViewer {
+                generation: Rc::new(RefCell::new(GenerationContext::new())),
+            },
         }
+    }
+
+    pub fn get_generation_handle(&self) -> Rc<RefCell<GenerationContext>> {
+        self.viewer.generation.clone()
     }
 }
 
@@ -351,13 +561,14 @@ impl RenderableUi for BottomPanelUi {
             .resizable(true)
             .show(ctx, |ui| {
                 self.snarl
-                    .show(&mut UiViewer, &self.style, Id::new("node_graph"), ui);
+                    .show(&mut self.viewer, &self.style, Id::new("node_graph"), ui);
             });
     }
 }
 
 fn field_numeric(ui: &mut Ui, name: impl Into<String>, value: &mut impl Numeric) {
+    let drag_value = egui::DragValue::new(value);
     ui.label(name.into());
-    ui.add(egui::DragValue::new(value));
+    ui.add(drag_value);
     ui.end_row();
 }

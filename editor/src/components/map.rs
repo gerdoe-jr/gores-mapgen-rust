@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fs::File, io::Read, rc::Rc, time::Instant};
+use std::{cell::RefCell, fs::File, io::Read, path::Path, rc::Rc, time::Instant};
 
 use image::{codecs::png::PngDecoder, ColorType, ImageDecoder, RgbaImage};
 use twgpu::{
@@ -20,7 +20,7 @@ use crate::{
     input_handler::{Cursors, Input, MultiInput},
 };
 
-use super::AppComponent;
+use super::{utils::generation::GenerationContext, AppComponent};
 
 pub struct MapLoader {
     wgpu_context: Rc<RefCell<WgpuContext>>,
@@ -33,7 +33,7 @@ impl MapLoader {
         Self {
             static_context,
             dynamic_context: None,
-            wgpu_context
+            wgpu_context,
         }
     }
 
@@ -109,12 +109,18 @@ pub struct TwGpuComponent {
     old_camera: Camera,
 
     map_loader: Rc<RefCell<MapLoader>>,
+    generation: Rc<RefCell<GenerationContext>>,
 
     render_size: Vec2<f32>,
 }
 
 impl TwGpuComponent {
-    pub fn new(width: u32, height: u32, wgpu_context: Rc<RefCell<WgpuContext>>) -> Self {
+    pub fn new(
+        width: u32,
+        height: u32,
+        wgpu_context: Rc<RefCell<WgpuContext>>,
+        generation: Rc<RefCell<GenerationContext>>,
+    ) -> Self {
         let render_size: Vec2<f32> = Vec2::new(width, height).az();
 
         let camera = Camera::new(width as f32 / height as f32);
@@ -125,7 +131,10 @@ impl TwGpuComponent {
 
         let static_map_context = GpuMapStaticContext::new(&camera, wgpu_context.clone());
 
-        let map_loader = Rc::new(RefCell::new(MapLoader::new(static_map_context, wgpu_context)));
+        let map_loader = Rc::new(RefCell::new(MapLoader::new(
+            static_map_context,
+            wgpu_context,
+        )));
 
         Self {
             inputs,
@@ -133,6 +142,7 @@ impl TwGpuComponent {
             camera,
             old_camera,
             map_loader,
+            generation,
             render_size,
         }
     }
@@ -213,7 +223,8 @@ impl AppComponent for TwGpuComponent {
 
         let time = Instant::now().elapsed().as_secs() as i64;
 
-        self.map_loader.borrow()
+        self.map_loader
+            .borrow()
             .static_context
             .camera
             .update(&self.camera, &wgpu_context.queue);
@@ -263,6 +274,13 @@ impl AppComponent for TwGpuComponent {
         }
 
         self.old_camera = self.camera;
+
+        // hack: weird way to poll
+        if let Some(tw_map) = self.generation.borrow_mut().take_map() {
+            self.map_loader.borrow_mut().unload();
+            self.map_loader.borrow_mut().load(tw_map);
+            println!("loaded");
+        }
     }
 
     fn on_resize(&mut self, size: PhysicalSize<u32>) {
@@ -273,26 +291,38 @@ impl AppComponent for TwGpuComponent {
     }
 }
 
-fn load_external_image(image: &mut Image, version: Version) {
-    if let Image::External(ex) = image {
+pub fn load_image<P: AsRef<Path>>(path: P) -> Image {
+    let mut buf = Vec::new();
+    let mut file = File::open(&path).unwrap();
+
+    file.read_to_end(&mut buf).unwrap();
+
+    let image_decoder = PngDecoder::new(buf.as_slice()).unwrap();
+    assert_eq!(image_decoder.color_type(), ColorType::Rgba8); // TODO: better error handling
+
+    let mut image_buffer = vec![0_u8; image_decoder.total_bytes() as usize];
+    let (width, height) = image_decoder.dimensions();
+    image_decoder.read_image(&mut image_buffer).unwrap();
+
+    let rgba_image = RgbaImage::from_vec(width, height, image_buffer).unwrap();
+
+    Image::Embedded(EmbeddedImage {
+        name: path.as_ref().file_name().unwrap().to_str().unwrap().to_string(),
+        image: rgba_image.into(),
+    })
+}
+
+fn load_external_image(external_image: &mut Image, version: Version) {
+    if let Image::External(ex) = external_image {
         let _version = match version {
             Version::DDNet06 => "06",
             Version::Teeworlds07 => "07",
         };
 
-        let url = format!("data/mapres/{}.png", ex.name);
-        let mut file = File::open(url).unwrap();
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf).unwrap();
-        let image_decoder = PngDecoder::new(buf.as_slice()).unwrap();
-        assert_eq!(image_decoder.color_type(), ColorType::Rgba8);
-        let mut image_buffer = vec![0_u8; image_decoder.total_bytes() as usize];
-        let (width, height) = image_decoder.dimensions();
-        image_decoder.read_image(&mut image_buffer).unwrap();
-        let rgba_image = RgbaImage::from_vec(width, height, image_buffer).unwrap();
-        *image = Image::Embedded(EmbeddedImage {
-            name: image.name().clone(),
-            image: rgba_image.into(),
-        });
+        let path = format!("data/mapres/{}.png", ex.name);
+        
+        let embedded_image = load_image(path);
+
+        *external_image = embedded_image;
     }
 }

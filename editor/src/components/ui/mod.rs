@@ -31,8 +31,11 @@ impl UiComponent {
     ) -> Self {
         let egui_context = Context::default();
 
-        // speed up this lazy ui
-        egui_context.style_mut(|style| style.animation_time /= 2.0);
+        egui_context.style_mut(|style| {
+            // speed up this lazy ui
+            style.animation_time /= 2.0;
+            style.interaction.selectable_labels = false;
+        });
 
         let state = egui_winit::State::new(
             egui_context,

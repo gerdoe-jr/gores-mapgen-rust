@@ -14,6 +14,7 @@ pub struct PulseBrushMutation {
 
 impl PulseBrushMutation {
     pub fn new(value_min: usize, value_max: usize, overall_steps: usize, normal_peak: f32) -> Self {
+        println!("pulse: steps: {}", overall_steps);
         Self {
             value_border: value_min,
             value_climax: value_max,
@@ -26,6 +27,10 @@ impl PulseBrushMutation {
 
 impl Mutator<Brush> for PulseBrushMutation {
     fn mutate(&mut self, mutant: &mut Brush) -> MutationState {
+        if self.steps == 0 {
+            return MutationState::Finished;
+        }
+
         let diff = (self.value_border as f32 - self.value_climax as f32).abs();
         let current_step = self.overall_steps - self.steps;
         let overall_steps_until_peak = (self.overall_steps as f32 * self.normal_peak) as usize;
@@ -39,15 +44,15 @@ impl Mutator<Brush> for PulseBrushMutation {
                 + self.value_border as f32
         };
 
-        println!("pulse slope: {}", slope);
+        println!("[pulse]\tslope\t{}", slope);
         mutant.apply_scale(slope);
 
         self.steps -= 1;
 
-        if self.steps == 0 {
-            return MutationState::Finished;
-        }
-
         MutationState::Processing
+    }
+
+    fn reset(&mut self) {
+        self.steps = self.overall_steps;
     }
 }

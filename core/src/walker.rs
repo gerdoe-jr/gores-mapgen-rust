@@ -115,6 +115,11 @@ impl Walker {
 
         let current_state = self.states.last().unwrap();
 
+        if self.raw_waypoints.len() == current_state.waypoint + 1 {
+            // we reached last waypoint, halt
+            return 0;
+        }
+
         // check if we reached waypoint
         let waypoint_pos = from_raw(
             self.raw_waypoints[current_state.waypoint],
@@ -126,12 +131,8 @@ impl Walker {
         let current_distance = euclidian(waypoint_pos.view(), current_pos.view());
 
         // TODO: make it configurable(?)
-        if current_distance < 5.0 {
+        if current_distance < 2.0 {
             // we reached waypoint, choose next
-            if self.raw_waypoints.len() == current_state.waypoint + 1 {
-                // we reached last waypoint, halt
-                return 0;
-            }
 
             self.preferred_state.waypoint += 1;
         }

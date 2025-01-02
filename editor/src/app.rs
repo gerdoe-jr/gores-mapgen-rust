@@ -19,7 +19,10 @@ use twgpu::device_descriptor;
 
 use crate::components::{
     map::TwGpuComponent,
-    ui::{bottom_panel::BottomPanelUi, context::UiContext, float::FloatWindowUi, left_panel::LeftPanelUi, UiComponent},
+    ui::{
+        bottom_panel::BottomPanelUi, context::UiContext, float::FloatWindowUi,
+        left_panel::LeftPanelUi, UiComponent,
+    },
     AppComponent,
 };
 
@@ -113,14 +116,22 @@ impl<'w, 'a> App<'w, 'a> {
             config,
         }));
 
-        let twgpu = Box::new(TwGpuComponent::new(width, height, wgpu_context.clone()));
+        // TODO: ugly
 
+        let bottom_panel = BottomPanelUi::new();
+        let generation = bottom_panel.get_generation_handle();
+        let twgpu = Box::new(TwGpuComponent::new(
+            width,
+            height,
+            wgpu_context.clone(),
+            generation,
+        ));
         let map_loader = twgpu.get_map_loader_handle();
 
         let mut ui_context = UiContext::new();
 
         ui_context.add_renderable(LeftPanelUi::new(map_loader));
-        ui_context.add_renderable(BottomPanelUi::new());
+        ui_context.add_renderable(bottom_panel);
         ui_context.add_renderable(FloatWindowUi {});
 
         let ui = Box::new(UiComponent::new(ui_context, &window, wgpu_context.clone()));
@@ -145,10 +156,6 @@ impl<'w, 'a> App<'w, 'a> {
                     event: window_event,
                     ..
                 } => {
-                    // for component in self.components.iter_mut() {
-                    //     component.on_window_event(&window_event, &self.wgpu_context);
-                    // }
-
                     // process user input from top layer to bottom
                     for component in self.components.iter_mut().rev() {
                         if component.on_user_input(&self.window, &window_event) {

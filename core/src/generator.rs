@@ -14,12 +14,20 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn new(scale_factor: f32) -> Self {
+    pub fn new() -> Self {
         Self {
-            walker: Walker::new(scale_factor),
+            walker: Walker::new(1.0),
             brush: Brush::new(),
             before_step: None,
         }
+    }
+
+    pub fn set_scale_factor(&mut self, scale_factor: f32) {
+        self.walker.set_scale_factor(scale_factor);
+    }
+
+    pub fn get_scale_factor(&self) -> f32 {
+        self.walker.get_scale_factor()
     }
 
     pub fn on_step(&mut self, func: impl FnMut(&mut Walker, &mut Map, &mut Brush) + 'static) {

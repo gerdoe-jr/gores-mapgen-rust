@@ -11,6 +11,7 @@ pub struct RightWalkerMutation {
 
 impl RightWalkerMutation {
     pub fn new(overall_steps: usize) -> Self {
+        println!("right: steps: {}", overall_steps);
         Self {
             overall_steps,
             steps: overall_steps,
@@ -32,5 +33,9 @@ impl Mutator<Walker> for RightWalkerMutation {
         self.steps -= 1;
 
         MutationState::Processing
+    }
+
+    fn reset(&mut self) {
+        self.steps = self.overall_steps;
     }
 }

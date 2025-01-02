@@ -6,6 +6,7 @@ use crate::app::{RenderContext, WgpuContext};
 
 pub mod map;
 pub mod ui;
+mod utils;
 
 pub trait AppComponent {
     fn label(&self) -> &'static str {
@@ -18,6 +19,10 @@ pub trait AppComponent {
         window: &Window,
         render_context: Option<&mut RenderContext>,
         wgpu_context: &Rc<RefCell<WgpuContext>>,
-    );
-    fn on_resize(&mut self, size: PhysicalSize<u32>);
+    ) {
+        let (_, _, _) = (window, render_context, wgpu_context);
+    }
+    fn on_resize(&mut self, size: PhysicalSize<u32>) {
+        let (_,) = (size,);
+    }
 }

@@ -43,4 +43,10 @@ impl Mutator<Walker> for RandomWalkerMutation {
 
         MutationState::Processing
     }
+
+    fn reset(&mut self) {
+        self.steps = self.overall_steps;
+
+        self.prng.reset();
+    }
 }

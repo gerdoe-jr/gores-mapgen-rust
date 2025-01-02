@@ -33,4 +33,8 @@ impl Mutator<Walker> for BackwardsWalkerMutation {
 
         MutationState::Finished
     }
+
+    fn reset(&mut self) {
+        self.steps = self.overall_steps;
+    }
 }

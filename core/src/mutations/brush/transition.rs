@@ -24,19 +24,23 @@ impl TransitionBrushMutation {
 
 impl Mutator<Brush> for TransitionBrushMutation {
     fn mutate(&mut self, mutant: &mut Brush) -> MutationState {
-        let diff = (self.value_from as f32 - self.value_to as f32).abs();
-        let current_step = self.overall_steps - self.steps;
-        let slope = current_step as f32 / self.overall_steps as f32 * diff + self.value_from as f32;
-
-        println!("transition slope: {}", slope);
-        mutant.apply_scale(slope);
-
-        self.steps -= 1;
-
         if self.steps == 0 {
             return MutationState::Finished;
         }
 
+        let diff = (self.value_from as f32 - self.value_to as f32).abs();
+        let current_step = self.overall_steps - self.steps;
+        let slope = current_step as f32 / self.overall_steps as f32 * diff + self.value_from as f32;
+
+        println!("[trans]\tslope\t{}", slope);
+        mutant.apply_scale(slope);
+
+        self.steps -= 1;
+
         MutationState::Processing
+    }
+
+    fn reset(&mut self) {
+        self.steps = self.overall_steps;
     }
 }
